@@ -1,0 +1,35 @@
+# Prisma Reference
+
+Local reference: `../../backend/prisma/schema.prisma` (source of truth)
+
+## Conventions enforced in our schema
+
+- All primary keys: `String @id @default(uuid())`
+- All monetary columns: `BigInt @default(0)` (ngwe)
+- All timestamps: `DateTime @default(now())` / `@updatedAt`
+- All enums defined in the same file, named in PascalCase
+- All group-scoped tables: composite index on `(groupId, ...)` for the dominant query
+- All FKs use `onDelete: Cascade` for owned data, `Restrict` for references that should block deletion
+
+## Migrations
+
+```bash
+# create + apply
+npx prisma migrate dev --name <feature_name>
+
+# apply to prod
+npx prisma migrate deploy
+
+# regenerate client after schema change
+npx prisma generate
+```
+
+## Money BigInt tip
+
+Prisma returns `bigint` (not `number`) for `BigInt` columns. JSON.stringify of `bigint` throws — convert first:
+
+```typescript
+JSON.stringify({ amount: amountNgwe.toString() })
+```
+
+The API layer is responsible for this conversion. Internally we keep everything in `bigint`.

@@ -1,0 +1,580 @@
+// =============================================================================
+// Chilimba — Prisma schema
+// =============================================================================
+//
+// HARD RULES (see docs/design-docs/data-model.md):
+//   1. Money is BigInt. NEVER use Float/Double/Decimal for monetary values.
+//      Unit: ngwe (1/100 of a Zambian Kwacha). K1,020.00 = 102000n.
+//   2. Phone numbers are E.164 strings: "+260977123456".
+//   3. All primary keys are UUIDs (String @id @default(uuid())).
+//   4. All timestamps are UTC. Use @default(now()) and @updatedAt.
+//   5. Group isolation: every group-scoped table has a composite index
+//      on (groupId, ...).
+//
+// This schema covers Phase 1 (Week 1-8). Phase 2 adds `penalties` and
+// `subscriptions`. Phase 3 adds `loans`, `loan_sureties`, `loan_repayments`.
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+enum UserRole {
+  member
+  super_admin
+}
+
+enum UserStatus {
+  active
+  suspended
+}
+
+enum OtpPurpose {
+  signup
+  password_reset
+}
+
+enum InvoiceStatus {
+  pending
+  paid
+  cancelled
+}
+
+enum PaymentProofStatus {
+  pending
+  approved
+  rejected
+}
+
+enum GroupStatus {
+  active
+  suspended
+  closed
+}
+
+enum GroupTemplate {
+  rotating_cash
+  grocery
+  custom
+}
+
+enum GroupMemberRole {
+  owner
+  treasurer
+  member
+}
+
+enum GroupMemberStatus {
+  active
+  suspended
+  exited
+}
+
+enum ContributionFrequency {
+  weekly
+  fortnightly
+  monthly
+}
+
+enum PayoutMethod {
+  queue
+  random
+  manual
+  voting
+}
+
+enum CycleStatus {
+  open
+  in_progress
+  completed
+}
+
+enum RoundStatus {
+  pending
+  collecting
+  paid_out
+  completed
+}
+
+enum ContributionStatus {
+  pending
+  paid
+  late
+  waived
+}
+
+enum LoanStatus {
+  pending
+  approved
+  active
+  repaid
+  rejected
+  defaulted
+}
+
+enum NotificationType {
+  welcome
+  otp
+  invoice_created
+  pop_approved
+  pop_rejected
+  contribution_reminder
+  contribution_received
+  payout
+  renewal
+  monthly_summary
+}
+
+enum NotificationStatus {
+  queued
+  sent
+  failed
+}
+
+enum WhatsappLogStatus {
+  sent
+  delivered
+  read
+  failed
+}
+
+enum PaymentMethod {
+  mobile_money
+  bank
+}
+
+enum MobileMoneyProvider {
+  mtn
+  airtel
+  zamtel
+}
+
+// =============================================================================
+// AUTH
+// =============================================================================
+
+model User {
+  id           String     @id @default(uuid())
+  firstName    String     @map("first_name") @db.VarChar(100)
+  lastName     String     @map("last_name") @db.VarChar(100)
+  phone        String     @unique @db.VarChar(20)
+  email        String?    @unique @db.VarChar(255)
+  passwordHash String     @map("password_hash")
+  otpVerified  Boolean    @default(false) @map("otp_verified")
+  role         UserRole   @default(member)
+  status       UserStatus @default(active)
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamptz()
+
+  otps                Otp[]
+  groupMembers        GroupMember[]
+  paymentProofsUploaded PaymentProof[] @relation("PaymentProofUploader")
+  paymentProofsReviewed PaymentProof[] @relation("PaymentProofReviewer")
+  invoicesCreated     Invoice[]       @relation("InvoiceCreator")
+  groupsOwned         Group[]         @relation("GroupOwner")
+  contributionsRecorded Contribution[] @relation("ContributionRecorder")
+  loansApproved         Loan[]           @relation("LoanApprover")
+  loanRepaymentsRecorded LoanRepayment[] @relation("LoanRepaymentRecorder")
+  notifications       Notification[]
+  whatsappLinkChallenges WhatsappGroupLinkChallenge[]
+
+  @@index([phone])
+  @@index([status])
+  @@map("users")
+}
+
+model Otp {
+  id          String     @id @default(uuid())
+  userId      String     @map("user_id")
+  purpose     OtpPurpose
+  code        String     @db.VarChar(10)
+  expiresAt   DateTime   @map("expires_at") @db.Timestamptz()
+  used        Boolean    @default(false)
+  attempts    Int        @default(0)
+  lockedUntil DateTime?  @map("locked_until") @db.Timestamptz()
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz()
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, used])
+  @@index([expiresAt])
+  @@map("otps")
+}
+
+// =============================================================================
+// BILLING (Week 3+)
+// =============================================================================
+
+model Invoice {
+  id            String        @id @default(uuid())
+  invoiceNumber String        @unique @map("invoice_number") @db.VarChar(20)
+  customerName  String        @map("customer_name") @db.VarChar(200)
+  phone         String        @db.VarChar(20)
+  email         String?       @db.VarChar(255)
+  amountNgwe    BigInt        @map("amount_ngwe")
+  status        InvoiceStatus @default(pending)
+  description   String?
+  createdById   String?       @map("created_by")
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz()
+  paidAt        DateTime?     @map("paid_at") @db.Timestamptz()
+  expiresAt     DateTime?     @map("expires_at") @db.Timestamptz()
+
+  createdBy    User?           @relation("InvoiceCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  paymentProofs PaymentProof[]
+  paymentSettingOverride PaymentSetting?
+  group         Group?
+
+  @@index([status])
+  @@index([phone])
+  @@map("invoices")
+}
+
+model PaymentProof {
+  id           String             @id @default(uuid())
+  invoiceId    String             @map("invoice_id")
+  uploadedById String             @map("uploaded_by")
+  // Cloudinary public_id — we use it to destroy the asset later.
+  // Only the URL is stored in the DB, never the actual file bytes.
+  fileKey      String             @map("file_key")
+  // Cloudinary secure_url — what the admin sees in the preview.
+  fileUrl      String?            @map("file_url")
+  // 'image' for JPG/PNG, 'raw' for PDF. Used to sign the download URL
+  // correctly (private PDFs need the raw resource_type).
+  resourceType String?            @map("resource_type") @db.VarChar(20)
+  fileType     String             @map("file_type") @db.VarChar(10)
+  status       PaymentProofStatus @default(pending)
+  reviewedById String?            @map("reviewed_by")
+  reviewedAt   DateTime?          @map("reviewed_at") @db.Timestamptz()
+  notes        String?
+  createdAt    DateTime           @default(now()) @map("created_at") @db.Timestamptz()
+
+  invoice    Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  uploadedBy User    @relation("PaymentProofUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+  reviewedBy User?   @relation("PaymentProofReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([invoiceId, status])
+  @@map("payment_proofs")
+}
+
+// =============================================================================
+// GROUPS
+// =============================================================================
+
+model Group {
+  id          String        @id @default(uuid())
+  name        String        @db.VarChar(200)
+  description String?
+  invoiceId   String        @unique @map("invoice_id")
+  ownerId     String        @map("owner_id")
+  status      GroupStatus   @default(active)
+  template    GroupTemplate
+  country     String        @default("ZM") @db.VarChar(10)
+  currency    String        @default("ZMW") @db.VarChar(10)
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt   DateTime      @updatedAt @map("updated_at") @db.Timestamptz()
+
+  invoice        Invoice          @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  owner          User             @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  settings       GroupSetting?
+  members        GroupMember[]
+  cycles         Cycle[]
+  contributions  Contribution[]
+  loans          Loan[]
+  whatsappLinkChallenges WhatsappGroupLinkChallenge[]
+
+  @@index([ownerId])
+  @@index([status])
+  @@map("groups")
+}
+
+model WhatsappGroupLinkChallenge {
+  id              String   @id @default(uuid())
+  groupId         String   @map("group_id")
+  whatsappJid     String   @map("whatsapp_jid") @db.VarChar(100)
+  whatsappSubject String?  @map("whatsapp_subject") @db.VarChar(200)
+  code            String   @db.VarChar(10)
+  expiresAt       DateTime @map("expires_at") @db.Timestamptz()
+  used            Boolean  @default(false)
+  attempts        Int      @default(0)
+  createdById     String   @map("created_by_id")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  group     Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdBy User  @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([groupId, used])
+  @@index([expiresAt])
+  @@map("whatsapp_group_link_challenges")
+}
+
+model GroupSetting {
+  id                     String               @id @default(uuid())
+  groupId                String               @unique @map("group_id")
+  maxMembers             Int                  @default(20) @map("max_members")
+  contributionAmountNgwe BigInt               @map("contribution_amount_ngwe")
+  contributionFrequency  ContributionFrequency @default(monthly) @map("contribution_frequency")
+  gracePeriodDays        Int                  @default(5) @map("grace_period_days")
+  latePenaltyNgwe        BigInt               @default(0) @map("late_penalty_ngwe")
+  payoutRecipientsCount  Int                  @default(1) @map("payout_recipients_count")
+  payoutMethod           PayoutMethod         @default(queue) @map("payout_method")
+  allowLoans             Boolean              @default(false) @map("allow_loans")
+  maxLoanMultiplier      Decimal              @default(3.0) @map("max_loan_multiplier") @db.Decimal(4, 2)
+  loanInterestRate       Decimal              @default(0.20) @map("loan_interest_rate") @db.Decimal(5, 4)
+  absencePenaltyNgwe    BigInt               @default(0) @map("absence_penalty_ngwe")
+  exitPenaltyPercent     Decimal              @default(0.20) @map("exit_penalty_percent") @db.Decimal(5, 4)
+  whatsappReminders      Boolean              @default(true) @map("whatsapp_reminders")
+  reminderDaysBefore     Int                  @default(1) @map("reminder_days_before")
+  autoOpenNextCycle      Boolean              @default(false) @map("auto_open_next_cycle")
+  whatsappGroupJid       String?              @map("whatsapp_group_jid") @db.VarChar(100)
+  updatedAt              DateTime             @updatedAt @map("updated_at") @db.Timestamptz()
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@map("group_settings")
+}
+
+model GroupMember {
+  id             String            @id @default(uuid())
+  groupId        String            @map("group_id")
+  userId         String            @map("user_id")
+  role           GroupMemberRole   @default(member)
+  status         GroupMemberStatus @default(active)
+  payoutPosition Int?              @map("payout_position")
+  joinedAt       DateTime          @default(now()) @map("joined_at") @db.Timestamptz()
+  exitedAt       DateTime?         @map("exited_at") @db.Timestamptz()
+
+  group         Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contributions Contribution[]
+  payouts       CyclePayout[]
+  loans         Loan[]
+
+  @@unique([groupId, userId])
+  @@index([groupId, status])
+  @@index([groupId, payoutPosition])
+  @@map("group_members")
+}
+
+// =============================================================================
+// CYCLES & ROUNDS
+// =============================================================================
+
+model Cycle {
+  id           String      @id @default(uuid())
+  groupId      String      @map("group_id")
+  cycleNumber  Int         @map("cycle_number")
+  status       CycleStatus @default(open)
+  startedAt    DateTime?   @map("started_at") @db.Timestamptz()
+  completedAt  DateTime?   @map("completed_at") @db.Timestamptz()
+  createdAt    DateTime    @default(now()) @map("created_at") @db.Timestamptz()
+
+  group         Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  rounds        CycleRound[]
+  contributions Contribution[]
+
+  @@unique([groupId, cycleNumber])
+  @@index([groupId, status])
+  @@map("cycles")
+}
+
+model CycleRound {
+  id                 String      @id @default(uuid())
+  cycleId            String      @map("cycle_id")
+  roundNumber        Int         @map("round_number")
+  dueDate            DateTime    @map("due_date") @db.Date
+  status             RoundStatus @default(pending)
+  totalCollectedNgwe BigInt      @default(0) @map("total_collected_ngwe")
+  createdAt          DateTime    @default(now()) @map("created_at") @db.Timestamptz()
+
+  cycle         Cycle          @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  payouts       CyclePayout[]
+  contributions Contribution[]
+
+  @@unique([cycleId, roundNumber])
+  @@index([dueDate])
+  @@map("cycle_rounds")
+}
+
+model CyclePayout {
+  id           String    @id @default(uuid())
+  roundId      String    @map("round_id")
+  memberId     String    @map("member_id")
+  amountNgwe   BigInt    @map("amount_ngwe")
+  paidAt       DateTime? @map("paid_at") @db.Timestamptz()
+  proofKey     String?   @map("proof_key")
+  proofUrl     String?   @map("proof_url")
+  resourceType String?   @map("resource_type") @db.VarChar(20)
+  fileType     String?   @map("file_type") @db.VarChar(10)
+  notes        String?
+
+  round  CycleRound  @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  member GroupMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([roundId, memberId])
+  @@index([roundId])
+  @@map("cycle_payouts")
+}
+
+// =============================================================================
+// CONTRIBUTIONS
+// =============================================================================
+
+model Contribution {
+  id           String             @id @default(uuid())
+  groupId      String             @map("group_id")
+  cycleId      String             @map("cycle_id")
+  roundId      String             @map("round_id")
+  memberId     String             @map("member_id")
+  amountNgwe   BigInt             @map("amount_ngwe")
+  dueDate      DateTime           @map("due_date") @db.Date
+  paidDate     DateTime?          @map("paid_date") @db.Date
+  status       ContributionStatus @default(pending)
+  // Cloudinary fields (mirror of PaymentProof). The file is only the
+  // receipt — no actual bytes in the DB.
+  proofKey     String?            @map("proof_key")
+  proofUrl     String?            @map("proof_url")
+  resourceType String?            @map("resource_type") @db.VarChar(20)
+  fileType     String?            @map("file_type") @db.VarChar(10)
+  notes        String?
+  recordedById String?            @map("recorded_by")
+  createdAt    DateTime           @default(now()) @map("created_at") @db.Timestamptz()
+
+  group      Group       @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  cycle      Cycle       @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  round      CycleRound  @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  member     GroupMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  recordedBy User?       @relation("ContributionRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+
+  @@unique([cycleId, roundId, memberId])
+  @@index([groupId, status])
+  @@index([cycleId, memberId])
+  @@index([roundId, memberId])
+  @@map("contributions")
+}
+
+// =============================================================================
+// LOANS
+// =============================================================================
+
+model Loan {
+  id               String     @id @default(uuid())
+  groupId          String     @map("group_id")
+  memberId         String     @map("member_id")
+  amountNgwe       BigInt     @map("amount_ngwe")
+  interestRate     Decimal    @map("interest_rate") @db.Decimal(5, 4)
+  totalDueNgwe     BigInt     @map("total_due_ngwe")
+  amountRepaidNgwe BigInt     @default(0) @map("amount_repaid_ngwe")
+  status           LoanStatus @default(pending)
+  purpose          String?
+  requestedAt      DateTime   @default(now()) @map("requested_at") @db.Timestamptz()
+  approvedAt       DateTime?  @map("approved_at") @db.Timestamptz()
+  approvedById     String?    @map("approved_by")
+  disbursedAt      DateTime?  @map("disbursed_at") @db.Timestamptz()
+  dueDate          DateTime?  @map("due_date") @db.Date
+  createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt        DateTime   @updatedAt @map("updated_at") @db.Timestamptz()
+
+  group      Group         @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  member     GroupMember   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  approvedBy User?         @relation("LoanApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  repayments LoanRepayment[]
+
+  @@index([groupId, status])
+  @@index([memberId, status])
+  @@map("loans")
+}
+
+model LoanRepayment {
+  id           String   @id @default(uuid())
+  loanId       String   @map("loan_id")
+  amountNgwe   BigInt   @map("amount_ngwe")
+  paidAt       DateTime @default(now()) @map("paid_at") @db.Timestamptz()
+  recordedById String?  @map("recorded_by")
+  notes        String?
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  loan       Loan  @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  recordedBy User? @relation("LoanRepaymentRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+
+  @@index([loanId])
+  @@map("loan_repayments")
+}
+
+// =============================================================================
+// NOTIFICATIONS
+// =============================================================================
+
+model Notification {
+  id        String             @id @default(uuid())
+  userId    String             @map("user_id")
+  groupId   String?            @map("group_id")
+  type      NotificationType
+  channel   String             @default("whatsapp") @db.VarChar(20)
+  status    NotificationStatus @default(queued)
+  message   String
+  sentAt    DateTime?          @map("sent_at") @db.Timestamptz()
+  createdAt DateTime           @default(now()) @map("created_at") @db.Timestamptz()
+
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  whatsappLog WhatsappLog?
+
+  @@index([userId, status])
+  @@index([groupId, status])
+  @@map("notifications")
+}
+
+model WhatsappLog {
+  id                String            @id @default(uuid())
+  notificationId    String?           @unique @map("notification_id")
+  toPhone           String            @map("to_phone") @db.VarChar(20)
+  message           String
+  evolutionResponse Json?             @map("evolution_response")
+  status            WhatsappLogStatus
+  attempts          Int               @default(0)
+  errorMessage      String?           @map("error_message")
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz()
+
+  notification Notification? @relation(fields: [notificationId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([toPhone])
+  @@map("whatsapp_logs")
+}
+
+// =============================================================================
+// PAYMENT SETTINGS
+// =============================================================================
+//
+// One row per invoice override. A single row with `invoiceId = null` is the
+// platform default (Chilimba's own account that all invoices fall back to).
+// The at-most-one-platform-default invariant is enforced at the service layer
+// (singleton upsert), not the DB (Prisma can't easily model NULL-uniqueness
+// across all rows).
+
+model PaymentSetting {
+  id                  String               @id @default(uuid())
+  invoiceId           String?              @unique @map("invoice_id")
+  paymentMethod       PaymentMethod        @map("payment_method")
+  mobileMoneyProvider MobileMoneyProvider? @map("mobile_money_provider")
+  bankName            String?              @map("bank_name")
+  accountName         String               @map("account_name")
+  accountNumber       String               @map("account_number")
+  reference           String?
+  createdById         String?              @map("created_by")
+  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt           DateTime             @updatedAt @map("updated_at") @db.Timestamptz()
+
+  invoice Invoice? @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@map("payment_settings")
+}

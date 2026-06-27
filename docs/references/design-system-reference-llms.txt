@@ -1,0 +1,8 @@
+# Design System Reference
+
+**Stub.** Real design system lands in Week 7–8. See `../../DESIGN.md` for the conventions used in the meantime.
+
+Until then:
+- Tailwind defaults + a small set of conventions in `DESIGN.md`
+- `lucide-vue-next` for icons
+- No component library yet — plain Vue + Tailwind

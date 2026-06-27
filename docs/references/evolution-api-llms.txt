@@ -1,0 +1,24 @@
+# Evolution API Reference
+
+Local reference: `../../evolution-api/evolution-api.yml` (OpenAPI 3 spec for Evolution API v2.3.7)
+
+Key endpoints we use:
+
+```
+POST /message/sendText/{instance}
+Headers:
+  apikey: <EVOLUTION_API_KEY>
+  Content-Type: application/json
+Body:
+  {
+    "number": "+260977123456",
+    "text": "Your message"
+  }
+```
+
+The Chilimba wrapper (`backend/src/lib/whatsapp.ts`) always:
+1. Asserts the phone starts with `+` (E.164).
+2. Enqueues a BullMQ job (no inline calls).
+3. Lets the worker handle the actual HTTP call + retry + logging.
+
+See `../product-specs/whatsapp-notifications.md` for all message templates.

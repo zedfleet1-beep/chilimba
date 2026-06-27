@@ -1,0 +1,154 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased transition-colors duration-200;
+}
+
+body.app-light {
+  @apply bg-cream-50 text-slate-800;
+}
+
+html.dark body {
+  @apply bg-slate-950 text-slate-100;
+}
+
+html.dark body.app-light {
+  @apply bg-slate-950 text-slate-100;
+}
+
+/* Dark mode helpers for existing pages (backgrounds, borders, form fields) */
+html.dark .bg-white {
+  background-color: rgb(15 23 42);
+}
+html.dark .bg-white\/70 {
+  background-color: rgb(15 23 42 / 0.8);
+}
+html.dark .bg-white\/80 {
+  background-color: rgb(15 23 42 / 0.9);
+}
+html.dark .bg-cream-50,
+html.dark .bg-cream-100 {
+  background-color: rgb(2 6 23);
+}
+html.dark .bg-warm-50 {
+  background-color: rgb(30 41 59 / 0.6);
+}
+html.dark .bg-warm-100,
+html.dark .bg-slate-100 {
+  background-color: rgb(30 41 59);
+}
+html.dark .bg-brand-50,
+html.dark .bg-emerald-50 {
+  background-color: rgb(6 78 59 / 0.35);
+}
+html.dark .bg-sky-50 {
+  background-color: rgb(12 74 110 / 0.35);
+}
+html.dark .bg-coral-50 {
+  background-color: rgb(136 19 55 / 0.35);
+}
+
+html.dark .border-warm-100,
+html.dark .border-warm-50 {
+  border-color: rgb(51 65 85);
+}
+html.dark .border-slate-200,
+html.dark .border-brand-200,
+html.dark .border-brand-300,
+html.dark .border-emerald-200,
+html.dark .border-emerald-300 {
+  border-color: rgb(71 85 105);
+}
+
+html.dark .shadow-soft,
+html.dark .shadow-sm,
+html.dark .shadow-xl {
+  box-shadow: 0 0 0 1px rgb(51 65 85 / 0.55);
+}
+
+html.dark .divide-warm-50 > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgb(30 41 59);
+}
+
+html.dark input,
+html.dark select,
+html.dark textarea {
+  background-color: rgb(30 41 59);
+  border-color: rgb(71 85 105);
+  color: rgb(241 245 249);
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: rgb(100 116 139);
+}
+
+/* Text colors — existing pages use light-mode slate utilities without dark: variants */
+html.dark .text-slate-900,
+html.dark .text-slate-800 {
+  color: rgb(241 245 249);
+}
+html.dark .text-slate-700,
+html.dark .text-slate-600 {
+  color: rgb(203 213 225);
+}
+html.dark .text-slate-500 {
+  color: rgb(148 163 184);
+}
+html.dark .text-slate-400 {
+  color: rgb(100 116 139);
+}
+
+html.dark .text-emerald-800,
+html.dark .text-emerald-700 {
+  color: rgb(167 243 208);
+}
+html.dark .text-brand-700,
+html.dark .text-brand-600 {
+  color: rgb(110 231 183);
+}
+html.dark .text-red-600,
+html.dark .text-red-700 {
+  color: rgb(252 165 165);
+}
+html.dark .text-amber-700,
+html.dark .text-amber-800,
+html.dark .text-warm-600 {
+  color: rgb(253 230 138);
+}
+html.dark .text-sky-700,
+html.dark .text-sky-800 {
+  color: rgb(125 211 252);
+}
+
+html.dark button:hover.bg-warm-50,
+html.dark button:hover.bg-emerald-100 {
+  background-color: rgb(51 65 85);
+}
+
+html.dark .hover\:bg-warm-50:hover {
+  background-color: rgb(30 41 59);
+}
+
+html.dark .from-warm-50 {
+  --tw-gradient-from: rgb(30 41 59) var(--tw-gradient-from-position);
+  --tw-gradient-to: rgb(30 41 59 / 0) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+html.dark .to-cream-100,
+html.dark .to-warm-50 {
+  --tw-gradient-to: rgb(15 23 42) var(--tw-gradient-to-position);
+}
+html.dark .from-brand-50 {
+  --tw-gradient-from: rgb(30 41 59) var(--tw-gradient-from-position);
+  --tw-gradient-to: rgb(30 41 59 / 0) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
