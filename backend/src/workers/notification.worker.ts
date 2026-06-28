@@ -2,6 +2,7 @@
  * Notification worker. Consumes BullMQ 'send-whatsapp' jobs and calls
  * Evolution API. Logs every attempt to whatsapp_logs.
  */
+import '../register-paths';
 import { Job } from 'bullmq';
 import { prisma } from '@/lib/prisma';
 import { startWhatsAppWorker, WhatsAppJobData } from '@/lib/queue';

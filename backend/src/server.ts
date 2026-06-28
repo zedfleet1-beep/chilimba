@@ -3,6 +3,7 @@
  * workers in the same Node process (dev convenience). In production, run
  * each worker separately with `npm run worker`.
  */
+import './register-paths';
 import { createApp } from './app';
 import { env } from './env';
 import { logger } from './lib/logger';
