@@ -24,6 +24,17 @@ import { prisma } from './lib/prisma';
 import { S3Client, HeadBucketCommand } from '@aws-sdk/client-s3';
 import { getConnection } from './lib/queue';
 
+/** Origin for CORS: protocol + host only (no path, no trailing slash). */
+function normalizeOrigin(url: string): string {
+  const parsed = new URL(url);
+  return `${parsed.protocol}//${parsed.host}`;
+}
+
+function isAllowedCorsOrigin(origin: string | undefined): boolean {
+  if (!origin) return true;
+  return normalizeOrigin(origin) === normalizeOrigin(env.WEB_BASE_URL);
+}
+
 export function createApp() {
   const app = express();
 
@@ -32,7 +43,16 @@ export function createApp() {
   app.use(helmet());
   app.use(
     cors({
-      origin: env.NODE_ENV === 'development' ? true : env.WEB_BASE_URL,
+      origin:
+        env.NODE_ENV === 'development'
+          ? true
+          : (origin, callback) => {
+              if (isAllowedCorsOrigin(origin)) {
+                callback(null, origin ?? env.WEB_BASE_URL);
+              } else {
+                callback(new Error('Not allowed by CORS'));
+              }
+            },
       credentials: true,
     }),
   );

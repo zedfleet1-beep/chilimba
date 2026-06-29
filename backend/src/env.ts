@@ -39,7 +39,10 @@ const envSchema = z.object({
   CLOUDINARY_API_SECRET: z.string().optional(),
   CLOUDINARY_UPLOAD_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
 
-  WEB_BASE_URL: z.string().url(),
+  WEB_BASE_URL: z
+    .string()
+    .url()
+    .transform((url) => url.replace(/\/+$/, '')),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
 });
 
