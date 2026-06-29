@@ -7,6 +7,7 @@ import './register-paths';
 import { createApp } from './app';
 import { env } from './env';
 import { logger } from './lib/logger';
+import { ensureRedisReady } from './lib/queue';
 import { startNotificationWorker } from './workers/notification.worker';
 import { startLateDetectionWorker } from './modules/cycles/lateDetection';
 import { startContributionReminderWorker } from './modules/cycles/contributionReminders';
@@ -17,26 +18,34 @@ const server = app.listen(env.PORT, () => {
   logger.info({ port: env.PORT, env: env.NODE_ENV }, '🚀 Chilimba API listening');
 });
 
-// Start the workers. Both are best-effort — if Redis is down, they
-// log a warning and the API still serves traffic.
-try {
-  startNotificationWorker();
-  logger.info('notification worker started');
-} catch (e) {
-  logger.warn({ err: (e as Error).message }, 'notification worker failed to start');
-}
-try {
-  startLateDetectionWorker();
-  logger.info('late-detection worker started');
-} catch (e) {
-  logger.warn({ err: (e as Error).message }, 'late-detection worker failed to start');
-}
-try {
-  startContributionReminderWorker();
-  logger.info('contribution-reminder worker started');
-} catch (e) {
-  logger.warn({ err: (e as Error).message }, 'contribution-reminder worker failed to start');
-}
+// Start workers only after Redis is ready. Best-effort — if Redis is down,
+// they log a warning and the API still serves traffic.
+void (async () => {
+  const redisReady = await ensureRedisReady();
+  if (!redisReady) {
+    logger.warn('Redis unavailable — background workers not started');
+    return;
+  }
+
+  try {
+    startNotificationWorker();
+    logger.info('notification worker started');
+  } catch (e) {
+    logger.warn({ err: (e as Error).message }, 'notification worker failed to start');
+  }
+  try {
+    startLateDetectionWorker();
+    logger.info('late-detection worker started');
+  } catch (e) {
+    logger.warn({ err: (e as Error).message }, 'late-detection worker failed to start');
+  }
+  try {
+    startContributionReminderWorker();
+    logger.info('contribution-reminder worker started');
+  } catch (e) {
+    logger.warn({ err: (e as Error).message }, 'contribution-reminder worker failed to start');
+  }
+})();
 
 function shutdown(signal: string) {
   logger.info({ signal }, 'shutting down');

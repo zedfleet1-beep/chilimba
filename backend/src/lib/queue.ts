@@ -16,6 +16,7 @@ export const QUEUE_NAME = 'notifications';
 let _connection: IORedis | undefined;
 let _queue: Queue | undefined;
 let _errorLogged = false;
+let _readyPromise: Promise<boolean> | undefined;
 
 function buildConnection(): IORedis {
   if (_connection) return _connection;
@@ -46,6 +47,39 @@ function buildConnection(): IORedis {
 
 export function getConnection(): IORedis {
   return buildConnection();
+}
+
+/**
+ * Wait until the shared Redis connection is ready. Returns false when Redis
+ * is unreachable (workers should not start in that case).
+ */
+export async function ensureRedisReady(timeoutMs = 10_000): Promise<boolean> {
+  const conn = buildConnection();
+  if (conn.status === 'ready') return true;
+
+  if (!_readyPromise) {
+    _readyPromise = (async () => {
+      try {
+        await Promise.race([
+          conn.status === 'connecting'
+            ? new Promise<void>((resolve, reject) => {
+                conn.once('ready', () => resolve());
+                conn.once('error', reject);
+              })
+            : conn.connect(),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Redis connect timeout')), timeoutMs),
+          ),
+        ]);
+        await conn.ping();
+        return true;
+      } catch {
+        return false;
+      }
+    })();
+  }
+
+  return _readyPromise;
 }
 
 function buildQueueOptions(): QueueOptions {
@@ -79,6 +113,9 @@ export function startWhatsAppWorker(
     connection: buildConnection() as unknown as ConnectionOptions,
     concurrency: 5,
   });
+  worker.on('error', (err) => {
+    logger.warn({ err: err.message }, 'notification worker error');
+  });
   worker.on('failed', (job, err) => {
     // eslint-disable-next-line no-console
     console.error(`[worker] job ${job?.id} failed:`, err.message);
@@ -103,6 +140,9 @@ export function startScheduledWorker<T>(opts: ScheduledWorkerOptions<T>): Worker
     connection: buildConnection() as unknown as ConnectionOptions,
     concurrency: 1,
   });
+  worker.on('error', (err) => {
+    logger.warn({ err: err.message, queue: opts.queueName }, 'scheduled worker error');
+  });
   worker.on('failed', (job, err) => {
     // eslint-disable-next-line no-console
     console.error(`[${opts.queueName}] job ${job?.id} failed:`, err.message);
@@ -115,7 +155,7 @@ export function startScheduledWorker<T>(opts: ScheduledWorkerOptions<T>): Worker
   const queue = new Queue<T>(opts.queueName, {
     connection: buildConnection() as unknown as ConnectionOptions,
   });
-  const addRepeatableJob = queue.add as unknown as (
+  const addRepeatableJob = queue.add.bind(queue) as (
     name: string,
     data: T,
     options: { repeat: { pattern: string } },

@@ -46,7 +46,12 @@ export function createApp() {
     typeof value === 'bigint' ? value.toString() : value,
   );
 
-  // Health
+  // Liveness — process is up (use for Railway/deploy probes).
+  app.get('/health/live', (_req, res) => {
+    res.status(200).json({ success: true, data: { status: 'ok' } });
+  });
+
+  // Readiness — DB, Redis, and S3 must all respond.
   app.get('/health', async (_req, res) => {
     const services: Record<string, string> = { db: 'ok', redis: 'ok', s3: 'ok' };
     let allOk = true;
