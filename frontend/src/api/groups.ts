@@ -2,6 +2,7 @@
  * Group + member API client. Mirrors backend/src/modules/groups.
  */
 import { api } from './client';
+import type { PaymentSettingInput, PaymentSettingRow } from '@/api/paymentSettings';
 
 export type GroupTemplate = 'rotating_cash' | 'grocery' | 'custom';
 export type GroupStatus = 'active' | 'suspended' | 'closed';
@@ -181,6 +182,24 @@ export async function updateMember(
   const { data } = await api.put<{ success: true; data: GroupMember }>(
     `/groups/${groupId}/members/${memberId}`,
     patch,
+  );
+  return data.data;
+}
+
+export async function getGroupContributionPayment(groupId: string): Promise<PaymentSettingRow | null> {
+  const { data } = await api.get<{ success: true; data: PaymentSettingRow | null }>(
+    `/groups/${groupId}/contribution-payment`,
+  );
+  return data.data;
+}
+
+export async function upsertGroupContributionPayment(
+  groupId: string,
+  input: PaymentSettingInput,
+): Promise<PaymentSettingRow> {
+  const { data } = await api.put<{ success: true; data: PaymentSettingRow }>(
+    `/groups/${groupId}/contribution-payment`,
+    input,
   );
   return data.data;
 }

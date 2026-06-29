@@ -17,6 +17,7 @@ import {
   platformDefaultSchema,
   invoiceOverrideSchema,
   effectiveQuerySchema,
+  contributionQuerySchema,
 } from './payment-settings.validators';
 import {
   getPlatformDefault,
@@ -24,6 +25,7 @@ import {
   getByInvoice,
   upsertInvoiceOverride,
   getEffectiveForInvoice,
+  getContributionPaymentDetails,
 } from './payment-settings.service';
 
 const router = Router();
@@ -46,6 +48,16 @@ router.put(
   ah(async (req, res) => {
     const input = parseBody(platformDefaultSchema, req.body);
     const setting = await upsertPlatformDefault(input, req.user!.id);
+    res.json({ success: true, data: setting });
+  }),
+);
+
+router.get(
+  '/contribution-default',
+  requireAuth,
+  ah(async (req, res) => {
+    const { groupId } = parseBody(contributionQuerySchema, req.query);
+    const setting = await getContributionPaymentDetails(groupId);
     res.json({ success: true, data: setting });
   }),
 );

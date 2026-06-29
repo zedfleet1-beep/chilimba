@@ -157,7 +157,7 @@ describeIf('invoices', () => {
     expect(res.status).toBe(403);
   });
 
-  it('customer can read their own invoice (matched by phone)', async () => {
+  it('customer cannot read their own invoice (super_admin only)', async () => {
     const admin = await adminToken();
     const created = await request(app)
       .post('/api/v1/invoices')
@@ -168,11 +168,10 @@ describeIf('invoices', () => {
     const res = await request(app)
       .get(`/api/v1/invoices/${created.body.data.id}`)
       .set('Authorization', `Bearer ${token}`);
-    expect(res.status).toBe(200);
-    expect(res.body.data.invoiceNumber).toBe(created.body.data.invoiceNumber);
+    expect(res.status).toBe(403);
   });
 
-  it('GET /invoices/mine returns only the caller\'s invoices', async () => {
+  it('GET /invoices/mine is super_admin only', async () => {
     const admin = await adminToken();
     await request(app)
       .post('/api/v1/invoices')
@@ -183,12 +182,17 @@ describeIf('invoices', () => {
       .set('Authorization', `Bearer ${admin}`)
       .send({ customerName: 'B', phone: OTHER_CUSTOMER_PHONE, amountNgwe: 100 });
 
-    const token = await customerToken();
-    const res = await request(app)
+    const customer = await customerToken();
+    const denied = await request(app)
       .get('/api/v1/invoices/mine')
-      .set('Authorization', `Bearer ${token}`);
-    expect(res.status).toBe(200);
-    expect(res.body.data.every((i: { phone: string }) => i.phone === CUSTOMER_PHONE)).toBe(true);
+      .set('Authorization', `Bearer ${customer}`);
+    expect(denied.status).toBe(403);
+
+    const allowed = await request(app)
+      .get('/api/v1/invoices/mine')
+      .set('Authorization', `Bearer ${admin}`);
+    expect(allowed.status).toBe(200);
+    expect(Array.isArray(allowed.body.data)).toBe(true);
   });
 
   it('POST /invoices/:id/pop (multipart) creates a payment_proofs row with status=pending', async () => {
@@ -198,7 +202,7 @@ describeIf('invoices', () => {
       .set('Authorization', `Bearer ${admin}`)
       .send({ customerName: 'Mary', phone: CUSTOMER_PHONE, amountNgwe: 100 });
 
-    const token = await customerToken();
+    const token = await adminToken();
     // 1x1 transparent PNG (smallest valid PNG).
     const tinyPng = Buffer.from(
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
@@ -227,7 +231,7 @@ describeIf('invoices', () => {
       where: { id: created.body.data.id },
       data: { status: 'cancelled' },
     });
-    const token = await customerToken();
+    const token = await adminToken();
     const tinyPng = Buffer.from(
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
       'base64',
@@ -240,5 +244,25 @@ describeIf('invoices', () => {
     // (the request would 503 before the invoice-status check).
     if (res.status === 503) return;
     expect(res.status).toBe(409);
+  });
+
+  it('customer cannot upload POP (403)', async () => {
+    const admin = await adminToken();
+    const created = await request(app)
+      .post('/api/v1/invoices')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ customerName: 'Mary', phone: CUSTOMER_PHONE, amountNgwe: 100 });
+
+    const token = await customerToken();
+    const tinyPng = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+      'base64',
+    );
+    const res = await request(app)
+      .post(`/api/v1/invoices/${created.body.data.id}/pop`)
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', tinyPng, { filename: 'proof.png', contentType: 'image/png' });
+    if (res.status === 503) return;
+    expect(res.status).toBe(403);
   });
 });

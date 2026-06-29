@@ -78,13 +78,13 @@ const routes: RouteRecordRaw[] = [
     path: '/invoices',
     name: 'customer-invoices',
     component: () => import('@/pages/CustomerInvoices.vue'),
-    meta: { layout: 'app', title: 'My invoices' },
+    meta: { layout: 'app', requiresRole: 'super_admin', title: 'My invoices' },
   },
   {
     path: '/invoices/:id',
     name: 'customer-invoice-detail',
     component: () => import('@/pages/CustomerInvoiceDetail.vue'),
-    meta: { layout: 'app', title: 'Invoice' },
+    meta: { layout: 'app', requiresRole: 'super_admin', title: 'Invoice' },
   },
   // ---------- Groups ----------
   {

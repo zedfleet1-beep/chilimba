@@ -54,6 +54,7 @@ export interface Contribution {
   paidDate: string | null;
   status: ContributionStatus;
   proofUrl: string | null;
+  fileType?: string | null;
   notes: string | null;
   member?: GroupMember;
 }

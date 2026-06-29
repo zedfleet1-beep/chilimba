@@ -1,13 +1,17 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { Check, FileUp, Play, Plus, RefreshCw, RotateCw, WalletCards } from 'lucide-vue-next';
+import { Check, Play, Plus, RefreshCw, RotateCw, Wallet, WalletCards } from 'lucide-vue-next';
 import { useAuthStore } from '@/stores/auth';
 import { useGroupsStore } from '@/stores/groups';
 import { useCyclesStore } from '@/stores/cycles';
-import { formatNgwe } from '@/lib/money';
+import { formatNgwe, type NgweInput } from '@/lib/money';
+import type { CyclePayout } from '@/api/cycles';
 import { formatRoundLabel, cycleProgress, periodLabel } from '@/lib/roundLabels';
 import { getErrorMessage } from '@/api/client';
+import ContributionPayModal from '@/components/ContributionPayModal.vue';
+import ProofPreviewModal from '@/components/ProofPreviewModal.vue';
+import MemberContributionsPanel from '@/components/MemberContributionsPanel.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -19,6 +23,9 @@ const localError = ref('');
 const payoutNotes = ref('');
 const payoutFile = ref<File | undefined>();
 const showAssignModal = ref(false);
+const showContributionModal = ref(false);
+const showProofModal = ref(false);
+const proofReviewMemberId = ref<string | null>(null);
 const selectedRecipientIds = ref<string[]>([]);
 
 const groupId = computed(() => (typeof route.params.id === 'string' ? route.params.id : ''));
@@ -32,6 +39,59 @@ const contributionByMember = computed(() => new Map(cycles.contributions.map((it
 const frequency = computed(() => group.value?.settings?.contributionFrequency ?? 'monthly');
 const payoutRecipientCount = computed(() => group.value?.settings?.payoutRecipientsCount ?? 1);
 const isManualPayout = computed(() => group.value?.settings?.payoutMethod === 'manual');
+const myMember = computed(() => members.value.find((member) => member.userId === auth.user?.id) ?? null);
+const isTreasurer = computed(() => myRole.value === 'treasurer');
+const cycleInProgress = computed(() => cycles.current?.status === 'in_progress');
+const showMemberLedger = computed(
+  () => canManageMoney.value && members.value.length > 0 && cycleInProgress.value,
+);
+const pendingProofReviews = computed(() =>
+  cycles.contributions.filter((c) => c.status === 'pending' && !!c.proofUrl),
+);
+const myContribution = computed(() =>
+  myMember.value ? contributionByMember.value.get(myMember.value.id) ?? null : null,
+);
+const proofReviewContribution = computed(() =>
+  proofReviewMemberId.value ? contributionByMember.value.get(proofReviewMemberId.value) ?? null : null,
+);
+const myContributionStatus = computed(() => myContribution.value?.status ?? 'pending');
+const canUseContributionFlow = computed(
+  () => !!myMember.value && cycleInProgress.value && !!selectedRound.value,
+);
+const contributionAmountNgwe = computed(
+  () => group.value?.settings?.contributionAmountNgwe ?? '0',
+);
+const paidContributionsCount = computed(
+  () => cycles.contributions.filter((c) => c.status === 'paid' || c.status === 'late').length,
+);
+const paidContributionsTotalNgwe = computed(() =>
+  cycles.contributions
+    .filter((c) => c.status === 'paid' || c.status === 'late')
+    .reduce((sum, c) => sum + BigInt(c.amountNgwe || '0'), 0n),
+);
+const effectiveCollectedNgwe = computed(() => {
+  const fromRound = BigInt(selectedRound.value?.totalCollectedNgwe ?? '0');
+  return fromRound > 0n ? fromRound : paidContributionsTotalNgwe.value;
+});
+const expectedPayoutPerRecipientNgwe = computed(() => {
+  const recipients = cycles.payouts.length || 1;
+  const collected = effectiveCollectedNgwe.value;
+  if (collected > 0n) return collected / BigInt(recipients);
+  const perMember = BigInt(contributionAmountNgwe.value || '0');
+  const fallback = (perMember * BigInt(members.value.length || 1)) / BigInt(recipients);
+  return fallback > 0n ? fallback : perMember;
+});
+
+function payoutDisplayAmount(payout: CyclePayout): NgweInput {
+  if (payout.paidAt && BigInt(payout.amountNgwe || '0') > 0n) {
+    return payout.amountNgwe;
+  }
+  return expectedPayoutPerRecipientNgwe.value;
+}
+
+function payoutAmountIsEstimated(payout: CyclePayout): boolean {
+  return !payout.paidAt || BigInt(payout.amountNgwe || '0') === 0n;
+}
 
 const progress = computed(() => {
   if (!cycles.current?.rounds.length) return null;
@@ -107,14 +167,6 @@ async function onSelectRound(roundId: string) {
   await cycles.selectRound(groupId.value, roundId);
 }
 
-async function onProofChange(memberId: string, event: Event) {
-  const input = event.target as HTMLInputElement;
-  const file = input.files?.[0];
-  if (!file) return;
-  await runAction(() => cycles.uploadProof(groupId.value, memberId, file));
-  input.value = '';
-}
-
 async function onPayoutFileChange(event: Event) {
   const input = event.target as HTMLInputElement;
   payoutFile.value = input.files?.[0];
@@ -148,6 +200,39 @@ async function onAssignRecipients() {
   await runAction(async () => {
     await cycles.assignRecipients(groupId.value, [...selectedRecipientIds.value]);
     showAssignModal.value = false;
+  });
+}
+
+async function onModalUpload(file: File) {
+  if (!myMember.value) return;
+  await runAction(async () => {
+    await cycles.uploadProof(groupId.value, myMember.value!.id, file);
+    showContributionModal.value = false;
+  });
+}
+
+function openProofReview(memberId: string) {
+  const contribution = contributionByMember.value.get(memberId);
+  if (!contribution?.proofUrl) return;
+  proofReviewMemberId.value = memberId;
+  showProofModal.value = true;
+}
+
+function openFirstPendingProofReview() {
+  const first = pendingProofReviews.value[0];
+  if (first) openProofReview(first.memberId);
+}
+
+function closeProofReview() {
+  showProofModal.value = false;
+  proofReviewMemberId.value = null;
+}
+
+async function onApproveFromProof() {
+  if (!proofReviewMemberId.value) return;
+  await runAction(async () => {
+    await cycles.approve(groupId.value, proofReviewMemberId.value!);
+    closeProofReview();
   });
 }
 
@@ -185,7 +270,7 @@ watch(() => route.params.id, loadForRoute);
 
           <div class="flex flex-wrap gap-2">
             <button
-              v-if="isOwner && !cycles.current"
+              v-if="isOwner && cycles.canOpenCycle"
               class="inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-60"
               :disabled="cycles.saving"
               @click="onOpenCycle"
@@ -210,6 +295,14 @@ watch(() => route.params.id, loadForRoute);
             >
               <Check class="w-4 h-4" />
               Complete
+            </button>
+            <button
+              v-if="canUseContributionFlow"
+              class="inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700"
+              @click="showContributionModal = true"
+            >
+              <Wallet class="w-4 h-4" />
+              Make contribution
             </button>
             <button
               class="inline-flex items-center gap-2 h-10 px-4 rounded-lg border border-slate-200 text-slate-700 text-sm font-medium hover:bg-warm-50"
@@ -260,9 +353,79 @@ watch(() => route.params.id, loadForRoute);
       <div v-if="!cycles.current" class="bg-white rounded-2xl shadow-soft border border-warm-100 p-10 text-center">
         <p class="font-medium text-slate-700">No cycle is open</p>
         <p class="text-sm text-slate-500 mt-1">The owner can open the first rotation when members and settings are ready.</p>
+        <button
+          v-if="isOwner"
+          class="mt-4 inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-60"
+          :disabled="cycles.saving"
+          @click="onOpenCycle"
+        >
+          <Plus class="w-4 h-4" />
+          Open cycle
+        </button>
       </div>
 
-      <template v-else>
+      <div v-else class="space-y-4">
+      <div
+        v-if="cycles.current.status === 'completed' && cycles.canOpenCycle"
+        class="bg-brand-50 border border-brand-100 rounded-2xl p-5 text-sm text-brand-900"
+      >
+        Cycle #{{ cycles.current.cycleNumber }} is complete.
+        <span v-if="isOwner">
+          Click <strong>Open cycle</strong> above to create the next rotation, then <strong>Start</strong> to begin collections.
+          (Start only appears after a new cycle is opened.)
+        </span>
+        <span v-else> The owner can open the next cycle when ready.</span>
+      </div>
+
+      <div
+        v-if="canManageMoney && cycles.current?.status === 'open'"
+        class="bg-amber-50 border border-amber-100 rounded-2xl p-4 text-sm text-amber-900"
+      >
+        <template v-if="isOwner">
+          The cycle is open but not started yet. Tap <strong>Start</strong> above before members can pay and you can review proofs.
+        </template>
+        <template v-else>
+          The cycle is open but not started yet. Ask the owner to tap <strong>Start</strong> before members can pay and you can review proofs.
+        </template>
+      </div>
+
+      <div
+        v-else-if="canManageMoney && cycleInProgress"
+        class="bg-sky-50 border border-sky-100 rounded-2xl p-4 text-sm text-sky-900"
+      >
+        <template v-if="pendingProofReviews.length > 0">
+          <p class="font-medium">
+            {{ pendingProofReviews.length }} proof{{ pendingProofReviews.length === 1 ? '' : 's' }} waiting for approval
+          </p>
+          <p class="mt-1 text-sky-800/90">
+            Open <strong>Member collections</strong> below, tap <strong>Review</strong>, then <strong>Approve POP</strong>.
+          </p>
+          <button
+            class="mt-3 inline-flex items-center gap-2 h-9 px-4 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700"
+            @click="openFirstPendingProofReview"
+          >
+            Review now
+          </button>
+        </template>
+        <p v-else>
+          As {{ isTreasurer ? 'treasurer' : 'owner' }}, use <strong>Member collections</strong> below to review uploaded proofs or record cash payments.
+        </p>
+      </div>
+
+      <div
+        v-else-if="!canManageMoney"
+        class="bg-warm-50 border border-warm-100 rounded-2xl p-4 text-sm text-slate-700"
+      >
+        See everything you have paid in
+        <router-link
+          :to="{ name: 'group-reports', params: { id: groupId }, query: { tab: 'members' } }"
+          class="text-brand-700 font-medium hover:underline"
+        >
+          Reports → My contributions
+        </router-link>.
+      </div>
+
+      <div>
         <div class="flex gap-2 overflow-x-auto pb-1">
           <button
             v-for="round in cycles.current.rounds"
@@ -280,66 +443,57 @@ watch(() => route.params.id, loadForRoute);
         </div>
 
         <div v-if="selectedRound" class="grid grid-cols-1 xl:grid-cols-[1fr_22rem] gap-6">
-          <div class="bg-white rounded-2xl shadow-soft border border-warm-100">
-            <div class="p-4 border-b border-warm-50 flex items-center justify-between gap-3">
-              <div>
-                <h3 class="font-display text-lg font-semibold text-slate-900">{{ roundLabel(selectedRound.roundNumber, selectedRound.dueDate) }} contributions</h3>
-                <p class="text-sm text-slate-500">{{ formatNgwe(selectedRound.totalCollectedNgwe) }} collected</p>
-              </div>
+          <div class="space-y-4">
+          <div
+            v-if="canUseContributionFlow"
+            class="bg-white rounded-2xl shadow-soft border border-warm-100 p-6"
+          >
+            <h3 class="font-display text-lg font-semibold text-slate-900">Your payment this month</h3>
+            <p class="text-sm text-slate-500 mt-1">{{ roundLabel(selectedRound.roundNumber, selectedRound.dueDate) }}</p>
+            <div class="mt-4 flex flex-wrap items-center gap-3">
+              <span class="font-display text-2xl font-bold text-slate-900">{{ formatNgwe(contributionAmountNgwe) }}</span>
+              <span
+                class="px-2.5 py-0.5 rounded-full text-xs font-medium capitalize"
+                :class="statusTone(myContributionStatus)"
+              >
+                {{ myContributionStatus }}
+              </span>
             </div>
+            <p class="text-sm text-slate-600 mt-3">
+              Tap below to see where to pay and upload your proof.
+            </p>
+            <button
+              class="mt-4 inline-flex items-center gap-2 h-11 px-5 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700"
+              @click="showContributionModal = true"
+            >
+              <Wallet class="w-4 h-4" />
+              Make contribution
+            </button>
+          </div>
 
-            <div class="divide-y divide-warm-50">
-              <div v-for="member in members" :key="member.id" class="p-4 flex flex-col lg:flex-row lg:items-center gap-3">
-                <div class="flex-1 min-w-0">
-                  <p class="text-sm font-medium text-slate-800">{{ member.user?.firstName }} {{ member.user?.lastName }}</p>
-                  <p class="text-xs text-slate-500 font-mono">{{ member.user?.phone }}</p>
-                </div>
-                <span class="self-start lg:self-auto px-2 py-1 rounded-full text-xs font-medium capitalize" :class="statusTone(contributionByMember.get(member.id)?.status ?? 'pending')">
-                  {{ contributionByMember.get(member.id)?.status ?? 'pending' }}
-                </span>
-                <div class="flex flex-wrap items-center gap-2">
-                  <label
-                    v-if="canManageMoney || member.userId === auth.user?.id"
-                    class="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-slate-200 text-sm text-slate-700 hover:bg-warm-50 cursor-pointer"
-                  >
-                    <FileUp class="w-4 h-4" />
-                    POP
-                    <input class="sr-only" type="file" accept="image/*,application/pdf" @change="onProofChange(member.id, $event)" />
-                  </label>
-                  <button
-                    v-if="canManageMoney && !['paid', 'late', 'waived'].includes(contributionByMember.get(member.id)?.status ?? '')"
-                    class="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-60"
-                    :disabled="cycles.saving"
-                    @click="runAction(() => cycles.record(groupId, member.id))"
-                  >
-                    <Check class="w-4 h-4" />
-                    Record
-                  </button>
-                  <button
-                    v-if="canManageMoney && contributionByMember.get(member.id)?.status === 'pending' && contributionByMember.get(member.id)?.proofUrl"
-                    class="h-9 px-3 rounded-lg border border-slate-200 text-sm text-slate-700 hover:bg-warm-50 disabled:opacity-60"
-                    :disabled="cycles.saving"
-                    @click="runAction(() => cycles.approve(groupId, member.id))"
-                  >
-                    Approve POP
-                  </button>
-                  <button
-                    v-if="isOwner && !['paid', 'late', 'waived'].includes(contributionByMember.get(member.id)?.status ?? '')"
-                    class="h-9 px-3 rounded-lg border border-slate-200 text-sm text-slate-700 hover:bg-warm-50 disabled:opacity-60"
-                    :disabled="cycles.saving"
-                    @click="runAction(() => cycles.waive(groupId, member.id))"
-                  >
-                    Waive
-                  </button>
-                </div>
-              </div>
-            </div>
+          <MemberContributionsPanel
+            v-if="showMemberLedger"
+            :members="members"
+            :contributions="cycles.contributions"
+            :amount-ngwe="contributionAmountNgwe"
+            :collected-ngwe="selectedRound.totalCollectedNgwe"
+            :is-owner="isOwner"
+            :saving="cycles.saving"
+            @review="openProofReview"
+            @record="(memberId) => runAction(() => cycles.record(groupId, memberId))"
+            @waive="(memberId) => runAction(() => cycles.waive(groupId, memberId))"
+            @upload="(memberId, file) => runAction(() => cycles.uploadProof(groupId, memberId, file))"
+          />
           </div>
 
           <aside class="bg-white rounded-2xl shadow-soft border border-warm-100 p-4 space-y-4">
             <div>
               <h3 class="font-display text-lg font-semibold text-slate-900">Payouts</h3>
               <p class="text-sm text-slate-500">Recipients for {{ roundLabel(selectedRound.roundNumber, selectedRound.dueDate) }}</p>
+              <p v-if="cycles.payouts.length > 0" class="text-xs text-slate-500 mt-2">
+                {{ formatNgwe(effectiveCollectedNgwe) }} collected
+                <span v-if="paidContributionsCount > 0"> · {{ paidContributionsCount }} paid contribution{{ paidContributionsCount === 1 ? '' : 's' }}</span>
+              </p>
             </div>
 
             <div class="space-y-2">
@@ -350,13 +504,22 @@ watch(() => route.params.id, loadForRoute);
               >
                 <p class="text-sm font-medium text-slate-800">{{ memberName(payout.memberId) }}</p>
                 <div class="flex items-center justify-between mt-2 text-xs">
-                  <span class="text-slate-500">{{ formatNgwe(payout.amountNgwe) }}</span>
+                  <div>
+                    <span class="font-medium text-slate-700">{{ formatNgwe(payoutDisplayAmount(payout)) }}</span>
+                    <span v-if="payoutAmountIsEstimated(payout)" class="text-slate-400 ml-1">expected</span>
+                  </div>
                   <span class="px-2 py-0.5 rounded-full font-medium" :class="payout.paidAt ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'">
                     {{ payout.paidAt ? 'paid' : 'waiting' }}
                   </span>
                 </div>
               </div>
               <p v-if="cycles.payouts.length === 0" class="text-sm text-slate-500">No recipients assigned.</p>
+              <p
+                v-else-if="cycles.payouts.some((p) => !p.paidAt)"
+                class="text-xs text-slate-500"
+              >
+                Use <strong>Record payout</strong> below once you have sent money to the recipient. That locks in the amount and marks them paid.
+              </p>
             </div>
 
             <div v-if="canManageMoney && cycles.payouts.length > 0 && selectedRound.status !== 'completed'" class="space-y-3 pt-3 border-t border-warm-50">
@@ -403,7 +566,8 @@ watch(() => route.params.id, loadForRoute);
             </button>
           </aside>
         </div>
-      </template>
+      </div>
+      </div>
     </template>
 
     <div
@@ -450,6 +614,34 @@ watch(() => route.params.id, loadForRoute);
         </div>
       </div>
     </div>
+
+    <ProofPreviewModal
+      v-if="proofReviewContribution?.proofUrl"
+      :open="showProofModal"
+      :member-name="memberName(proofReviewMemberId ?? '')"
+      :amount-ngwe="proofReviewContribution.amountNgwe"
+      :status="proofReviewContribution.status"
+      :proof-url="proofReviewContribution.proofUrl"
+      :file-type="proofReviewContribution.fileType"
+      :can-approve="canManageMoney"
+      :approving="cycles.saving"
+      @close="closeProofReview"
+      @approve="onApproveFromProof"
+    />
+
+    <ContributionPayModal
+      :open="showContributionModal"
+      :group-id="groupId"
+      :group-name="group?.name ?? 'Group'"
+      :amount-ngwe="contributionAmountNgwe"
+      :round-label="selectedRound ? roundLabel(selectedRound.roundNumber, selectedRound.dueDate) : ''"
+      :due-date="selectedRound?.dueDate ?? ''"
+      :status="myContributionStatus"
+      :proof-url="myContribution?.proofUrl ?? null"
+      :uploading="cycles.saving"
+      @close="showContributionModal = false"
+      @upload="onModalUpload"
+    />
 
     <p v-if="localError || groups.error || cycles.error" class="text-sm text-red-600">
       {{ localError || groups.error || cycles.error }}

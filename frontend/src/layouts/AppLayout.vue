@@ -38,7 +38,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/invoices', label: 'My invoices', icon: Receipt },
+  { to: '/invoices', label: 'My invoices', icon: Receipt, adminOnly: true },
   { to: '/groups', label: 'My group', icon: Users },
   { to: '/help', label: 'User guide', icon: BookOpen },
   { to: '/admin', label: 'Admin', icon: BarChart3, adminOnly: true },

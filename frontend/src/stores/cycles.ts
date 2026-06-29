@@ -17,13 +17,20 @@ export const useCyclesStore = defineStore('cycles', () => {
     current.value?.rounds.find((round) => round.id === selectedRoundId.value) ?? current.value?.rounds[0] ?? null,
   );
 
+  const activeCycle = computed(() =>
+    cycles.value.find((cycle) => cycle.status === 'open' || cycle.status === 'in_progress') ?? null,
+  );
+
+  const canOpenCycle = computed(() => !activeCycle.value);
+
   async function fetchCycles(groupId: string) {
     loading.value = true;
     error.value = null;
     try {
       cycles.value = await cyclesApi.listCycles(groupId);
-      if (cycles.value.length > 0) {
-        await fetchCycle(groupId, cycles.value[0].id);
+      const toShow = activeCycle.value ?? cycles.value[0] ?? null;
+      if (toShow) {
+        await fetchCycle(groupId, toShow.id);
       } else {
         current.value = null;
         selectedRoundId.value = null;
@@ -219,6 +226,8 @@ export const useCyclesStore = defineStore('cycles', () => {
   return {
     cycles,
     current,
+    activeCycle,
+    canOpenCycle,
     contributions,
     payouts,
     selectedRoundId,

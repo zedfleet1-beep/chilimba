@@ -73,7 +73,9 @@ export async function notifyGroup(
   });
   if (!group?.settings?.whatsappGroupJid) return;
   const text = `*${group.name}*\n\n${message}\n\n— Chilimba`;
-  sendGroupWhatsApp(groupId, text).catch((e) =>
-    logger.warn({ err: e.message, groupId }, 'group WhatsApp notification failed'),
-  );
+  try {
+    await sendGroupWhatsApp(groupId, text);
+  } catch (e) {
+    logger.warn({ err: (e as Error).message, groupId }, 'group WhatsApp notification failed');
+  }
 }

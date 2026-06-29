@@ -9,6 +9,7 @@ import type { PaymentDetails } from '@/lib/payment';
 export interface PaymentSettingRow extends PaymentDetails {
   id: string;
   invoiceId: string | null;
+  groupId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -55,6 +56,15 @@ export async function upsertInvoiceOverride(
   const { data } = await api.put<{ success: true; data: PaymentSettingRow }>(
     `/payment-settings/by-invoice/${invoiceId}`,
     input,
+  );
+  return data.data;
+}
+
+/** Effective payment details for cycle contributions (group override → platform default). */
+export async function getContributionDefault(groupId?: string): Promise<PaymentDetails | null> {
+  const { data } = await api.get<{ success: true; data: PaymentDetails | null }>(
+    '/payment-settings/contribution-default',
+    { params: groupId ? { groupId } : undefined },
   );
   return data.data;
 }

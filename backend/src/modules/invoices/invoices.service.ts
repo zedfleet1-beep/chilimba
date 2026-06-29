@@ -201,8 +201,7 @@ export async function listInvoices(query: ListInvoicesQuery): Promise<Invoice[]>
 }
 
 /**
- * Fetch a single invoice with its POPs. super_admin can read any;
- * the matched customer can read their own (phone match).
+ * Fetch a single invoice with its POPs. super_admin only.
  * Embeds the effective paymentDetails (override → platform default).
  */
 export async function getInvoice(
@@ -210,6 +209,9 @@ export async function getInvoice(
   requesterUserId: string,
 ): Promise<Invoice & { paymentProofs: PaymentProof[]; paymentDetails: PaymentDetails | null }> {
   const requester = await prisma.user.findUniqueOrThrow({ where: { id: requesterUserId } });
+  if (requester.role !== 'super_admin') {
+    throw new ForbiddenError('Only super admins can view invoices');
+  }
   const invoice = await prisma.invoice.findUnique({
     where: { id },
     include: { paymentProofs: { orderBy: { createdAt: 'desc' } } },
@@ -217,15 +219,7 @@ export async function getInvoice(
   if (!invoice) throw new NotFoundError('Invoice');
 
   const paymentDetails = await getEffectivePaymentDetails(id);
-
-  if (requester.role === 'super_admin') {
-    return { ...invoice, paymentDetails };
-  }
-  // Customer path — match on phone.
-  if (invoice.phone === requester.phone) {
-    return { ...invoice, paymentDetails };
-  }
-  throw new ForbiddenError('You do not have access to this invoice');
+  return { ...invoice, paymentDetails };
 }
 
 /**
@@ -275,8 +269,8 @@ export async function uploadPop(
   const requester = await prisma.user.findUniqueOrThrow({ where: { id: requesterUserId } });
   const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } });
   if (!invoice) throw new NotFoundError('Invoice');
-  if (requester.role !== 'super_admin' && invoice.phone !== requester.phone) {
-    throw new ForbiddenError('You can only upload a POP for your own invoice');
+  if (requester.role !== 'super_admin') {
+    throw new ForbiddenError('Only super admins can upload invoice payment proofs');
   }
   if (invoice.status !== InvoiceStatus.pending) {
     throw new ConflictError(

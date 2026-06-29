@@ -290,6 +290,7 @@ model Group {
   contributions  Contribution[]
   loans          Loan[]
   whatsappLinkChallenges WhatsappGroupLinkChallenge[]
+  paymentSetting         PaymentSetting?
 
   @@index([ownerId])
   @@index([status])
@@ -563,6 +564,7 @@ model WhatsappLog {
 model PaymentSetting {
   id                  String               @id @default(uuid())
   invoiceId           String?              @unique @map("invoice_id")
+  groupId             String?              @unique @map("group_id")
   paymentMethod       PaymentMethod        @map("payment_method")
   mobileMoneyProvider MobileMoneyProvider? @map("mobile_money_provider")
   bankName            String?              @map("bank_name")
@@ -574,7 +576,9 @@ model PaymentSetting {
   updatedAt           DateTime             @updatedAt @map("updated_at") @db.Timestamptz()
 
   invoice Invoice? @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  group   Group?   @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   @@index([invoiceId])
+  @@index([groupId])
   @@map("payment_settings")
 }

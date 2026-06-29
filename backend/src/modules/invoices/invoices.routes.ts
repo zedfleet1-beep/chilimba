@@ -57,6 +57,7 @@ router.get(
 
 router.get(
   '/mine',
+  requireRole('super_admin'),
   ah(async (req, res) => {
     const invoices = await getMyInvoices(req.user!.id);
     res.json({ success: true, data: invoices });
@@ -65,6 +66,7 @@ router.get(
 
 router.get(
   '/:id',
+  requireRole('super_admin'),
   ah(async (req, res) => {
     const invoice = await getInvoice(req.params.id, req.user!.id);
     res.json({ success: true, data: invoice });
@@ -79,6 +81,7 @@ router.get(
  */
 router.post(
   '/:id/pop',
+  requireRole('super_admin'),
   // Fail fast with a clear error if Cloudinary isn't configured, rather
   // than letting multer consume the upload and then 500ing.
   (_req, res, next) => {

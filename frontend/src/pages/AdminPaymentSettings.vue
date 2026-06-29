@@ -19,8 +19,8 @@ const display = computed(() => (store.platform ? displayFor(store.platform) : nu
     <div>
       <h2 class="font-display text-2xl font-bold text-slate-900">Payment settings</h2>
       <p class="text-sm text-slate-500">
-        The default mobile-money or bank account that all invoices fall back to. Invoices can
-        override this on a per-customer basis.
+        Platform-wide fallback for invoices and for cycle contributions when a group has not set
+        its own payment details in <strong>Group settings</strong>.
       </p>
     </div>
 
@@ -73,7 +73,7 @@ const display = computed(() => (store.platform ? displayFor(store.platform) : nu
       <CreditCard class="w-10 h-10 mx-auto text-warm-500 mb-3" />
       <p class="font-medium text-slate-700">No platform default set</p>
       <p class="text-sm text-slate-500 mt-1 mb-4">
-        Set your default payment account so new invoices can show customers where to pay.
+        Set a platform default, or configure each group under Group settings → Contribution payment details.
       </p>
       <button
         class="inline-flex items-center gap-2 px-4 h-10 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700"

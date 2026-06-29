@@ -28,6 +28,8 @@ import {
   updateMember,
   removeMember,
 } from './members.service';
+import { platformDefaultSchema } from '@/modules/payment-settings/payment-settings.validators';
+import { getByGroup, upsertGroupPayment } from '@/modules/payment-settings/payment-settings.service';
 
 const router = Router();
 
@@ -82,6 +84,25 @@ router.put(
     const patch = parseBody(updateGroupSettingsSchema, req.body);
     const settings = await updateGroupSettings(req.params.id, patch);
     res.json({ success: true, data: settings });
+  }),
+);
+
+router.get(
+  '/:id/contribution-payment',
+  requireGroupRole('owner', 'treasurer', 'member'),
+  ah(async (req, res) => {
+    const setting = await getByGroup(req.params.id);
+    res.json({ success: true, data: setting });
+  }),
+);
+
+router.put(
+  '/:id/contribution-payment',
+  requireGroupRole('owner'),
+  ah(async (req, res) => {
+    const input = parseBody(platformDefaultSchema, req.body);
+    const setting = await upsertGroupPayment(req.params.id, input, req.user!.id);
+    res.json({ success: true, data: setting });
   }),
 );
 

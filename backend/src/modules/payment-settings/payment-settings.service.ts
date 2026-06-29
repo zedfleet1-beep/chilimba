@@ -65,10 +65,11 @@ function normalizeAccountNumber(
 function buildData(
   input: PlatformDefaultInput | InvoiceOverrideInput,
   createdById: string,
-  invoiceId: string | null,
+  scope: { invoiceId: string | null; groupId: string | null },
 ): Prisma.PaymentSettingUncheckedCreateInput {
   return {
-    invoiceId,
+    invoiceId: scope.invoiceId,
+    groupId: scope.groupId,
     paymentMethod: input.paymentMethod,
     mobileMoneyProvider: input.mobileMoneyProvider ?? null,
     bankName: input.bankName ?? null,
@@ -90,7 +91,7 @@ export async function upsertPlatformDefault(
   createdById: string,
 ): Promise<PaymentSetting> {
   assertValidForMethod(input);
-  const data = buildData(input, createdById, null);
+  const data = buildData(input, createdById, { invoiceId: null, groupId: null });
   const existing = await prisma.paymentSetting.findFirst({ where: { invoiceId: null } });
   if (existing) {
     return prisma.paymentSetting.update({ where: { id: existing.id }, data });
@@ -115,7 +116,7 @@ export async function upsertInvoiceOverride(
   if (!invoice) throw new NotFoundError('Invoice');
 
   assertValidForMethod(input);
-  const data = buildData(input, createdById, invoiceId);
+  const data = buildData(input, createdById, { invoiceId, groupId: null });
   const existing = await prisma.paymentSetting.findUnique({ where: { invoiceId } });
   if (existing) {
     return prisma.paymentSetting.update({ where: { id: existing.id }, data });
@@ -136,4 +137,65 @@ export async function getEffectiveForInvoice(
   if (override) return override;
   // Fall back to the platform default.
   return prisma.paymentSetting.findFirst({ where: { invoiceId: null } });
+}
+
+// ---------- Group contribution payment (per ROSCA) ----------
+
+export async function getByGroup(groupId: string): Promise<PaymentSetting | null> {
+  return prisma.paymentSetting.findFirst({ where: { groupId } });
+}
+
+export async function upsertGroupPayment(
+  groupId: string,
+  input: PlatformDefaultInput,
+  createdById: string,
+): Promise<PaymentSetting> {
+  const group = await prisma.group.findUnique({ where: { id: groupId } });
+  if (!group) throw new NotFoundError('Group');
+
+  assertValidForMethod(input);
+  const data = buildData(input, createdById, { invoiceId: null, groupId });
+  const existing = await prisma.paymentSetting.findFirst({ where: { groupId } });
+  if (existing) {
+    return prisma.paymentSetting.update({ where: { id: existing.id }, data });
+  }
+  return prisma.paymentSetting.create({ data });
+}
+
+/** Customer-facing payment details for cycle contributions (group → platform fallback). */
+export interface ContributionPaymentDetails {
+  paymentMethod: 'mobile_money' | 'bank';
+  mobileMoneyProvider: 'mtn' | 'airtel' | 'zamtel' | null;
+  bankName: string | null;
+  accountName: string;
+  accountNumber: string;
+  reference: string | null;
+  isOverride: boolean;
+}
+
+function toContributionDetails(
+  setting: PaymentSetting,
+  isOverride: boolean,
+): ContributionPaymentDetails {
+  return {
+    paymentMethod: setting.paymentMethod,
+    mobileMoneyProvider: setting.mobileMoneyProvider,
+    bankName: setting.bankName,
+    accountName: setting.accountName,
+    accountNumber: setting.accountNumber,
+    reference: setting.reference,
+    isOverride,
+  };
+}
+
+export async function getContributionPaymentDetails(
+  groupId?: string,
+): Promise<ContributionPaymentDetails | null> {
+  if (groupId) {
+    const groupSetting = await getByGroup(groupId);
+    if (groupSetting) return toContributionDetails(groupSetting, true);
+  }
+  const platform = await getPlatformDefault();
+  if (!platform) return null;
+  return toContributionDetails(platform, false);
 }

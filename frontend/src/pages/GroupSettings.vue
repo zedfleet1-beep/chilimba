@@ -5,14 +5,39 @@ import { useAuthStore } from '@/stores/auth';
 import { useGroupsStore } from '@/stores/groups';
 import { formatNgwe, parseNgwe } from '@/lib/money';
 import { getErrorMessage } from '@/api/client';
-import { ArrowLeft } from 'lucide-vue-next';
+import { ArrowLeft, CreditCard, Edit3 } from 'lucide-vue-next';
 import WhatsappGroupLink from '@/components/WhatsappGroupLink.vue';
+import PaymentDetailsCard from '@/components/PaymentDetailsCard.vue';
+import GroupContributionPaymentModal from '@/components/GroupContributionPaymentModal.vue';
+import * as groupsApi from '@/api/groups';
+import { getContributionDefault } from '@/api/paymentSettings';
+import type { PaymentDetails } from '@/lib/payment';
+import type { PaymentSettingRow } from '@/api/paymentSettings';
 
 const route = useRoute();
 const router = useRouter();
 const store = useGroupsStore();
 const auth = useAuthStore();
 const id = computed(() => String(route.params.id));
+
+const groupPayment = ref<PaymentSettingRow | null>(null);
+const effectivePayment = ref<PaymentDetails | null>(null);
+const showPaymentModal = ref(false);
+const paymentLoading = ref(false);
+
+async function loadPaymentDetails() {
+  paymentLoading.value = true;
+  try {
+    const [groupSetting, effective] = await Promise.all([
+      groupsApi.getGroupContributionPayment(id.value),
+      getContributionDefault(id.value),
+    ]);
+    groupPayment.value = groupSetting;
+    effectivePayment.value = effective;
+  } finally {
+    paymentLoading.value = false;
+  }
+}
 
 onMounted(async () => {
   await store.fetchOne(id.value);
@@ -21,6 +46,7 @@ onMounted(async () => {
     router.replace({ name: 'group-detail', params: { id: id.value } });
     return;
   }
+  await loadPaymentDetails();
   if (store.current?.settings) {
     const s = store.current.settings;
     name.value = store.current.name;
@@ -155,6 +181,40 @@ watch(saved, (v) => {
         </div>
       </div>
 
+      <div class="rounded-xl border border-brand-100 bg-brand-50/40 p-4 space-y-3">
+        <div class="flex items-start justify-between gap-3">
+          <div class="flex items-center gap-2">
+            <CreditCard class="w-5 h-5 text-brand-700 shrink-0" />
+            <div>
+              <h3 class="font-medium text-slate-900">Contribution payment details</h3>
+              <p class="text-xs text-slate-600 mt-0.5">
+                Where members send money when they tap <strong>Make contribution</strong>.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            class="inline-flex items-center gap-1.5 px-3 h-9 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 shrink-0"
+            @click="showPaymentModal = true"
+          >
+            <Edit3 class="w-4 h-4" />
+            {{ groupPayment ? 'Edit' : 'Set up' }}
+          </button>
+        </div>
+        <p v-if="paymentLoading" class="text-sm text-slate-500">Loading…</p>
+        <PaymentDetailsCard
+          v-else
+          :details="effectivePayment"
+          heading="Members will pay to"
+        />
+        <p v-if="!paymentLoading && !effectivePayment" class="text-sm text-amber-800">
+          Not set yet — tap <strong>Set up</strong> to add your mobile money or bank account.
+        </p>
+        <p v-else-if="!paymentLoading && !groupPayment" class="text-xs text-slate-500">
+          Using the platform default until you save group-specific details here.
+        </p>
+      </div>
+
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-1">Contribution (Kwacha)</label>
@@ -259,5 +319,13 @@ watch(saved, (v) => {
         </button>
       </div>
     </form>
+
+    <GroupContributionPaymentModal
+      v-if="showPaymentModal"
+      :group-id="id"
+      :initial="groupPayment"
+      @close="showPaymentModal = false"
+      @saved="showPaymentModal = false; loadPaymentDetails()"
+    />
   </div>
 </template>

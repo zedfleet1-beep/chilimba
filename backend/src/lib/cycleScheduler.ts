@@ -119,10 +119,15 @@ function pickRecipients(params: {
       // Deterministic by position. Wraps around the member list so a group
       // with 5 members and 2 recipients/round still has 3 rounds and each
       // member receives at least one payout before anyone gets a second.
+      // Skip duplicates within a round (e.g. 1 member + 2 recipients).
       const out: string[] = [];
+      const seen = new Set<string>();
       for (let i = 0; i < payoutRecipientsCount; i++) {
         const idx = (roundIndexZeroBased * payoutRecipientsCount + i) % ordered.length;
-        out.push(ordered[idx].id);
+        const memberId = ordered[idx].id;
+        if (seen.has(memberId)) continue;
+        seen.add(memberId);
+        out.push(memberId);
       }
       return out;
     }
@@ -131,7 +136,7 @@ function pickRecipients(params: {
       // ordered if the pool is exhausted (degenerate case).
       const pool = ordered.filter((m) => !alreadyAssigned.has(m.id));
       const source = pool.length >= payoutRecipientsCount ? pool : ordered;
-      return drawN(source.map((m) => m.id), payoutRecipientsCount);
+      return drawN(source.map((m) => m.id), Math.min(payoutRecipientsCount, source.length));
     }
     case PayoutMethod.manual:
     case PayoutMethod.voting:

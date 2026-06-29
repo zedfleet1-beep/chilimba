@@ -71,6 +71,24 @@ async function openCycleInternal(
   if (!group.settings) {
     throw new ConflictError('NO_SETTINGS' as never, 'This group has no settings');
   }
+  if (group.members.length === 0) {
+    throw new ConflictError(
+      'NO_MEMBERS' as never,
+      'Add at least one active member before opening a cycle',
+    );
+  }
+  if (group.settings.payoutRecipientsCount <= 0) {
+    throw new ConflictError(
+      'INVALID_PAYOUT_SETTINGS' as never,
+      'Set payout recipients to at least 1 in Group settings before opening a cycle',
+    );
+  }
+  if (group.members.length < group.settings.payoutRecipientsCount) {
+    throw new ConflictError(
+      'INSUFFICIENT_MEMBERS' as never,
+      `Add at least ${group.settings.payoutRecipientsCount} members (or lower payout recipients in Group settings). You currently have ${group.members.length}.`,
+    );
+  }
 
   const existing = await prisma.cycle.findFirst({
     where: {
@@ -220,12 +238,29 @@ export async function completeCycle(
   if (requester.role !== GroupMemberRole.owner) {
     throw new ForbiddenError('Only the group owner can complete a cycle');
   }
-  const cycle = await prisma.cycle.findUnique({ where: { id: cycleId } });
+  const cycle = await prisma.cycle.findUnique({
+    where: { id: cycleId },
+    include: {
+      group: {
+        select: {
+          id: true,
+          ownerId: true,
+          name: true,
+          settings: { select: { autoOpenNextCycle: true } },
+        },
+      },
+    },
+  });
   if (!cycle || cycle.groupId !== groupId) throw new NotFoundError('Cycle');
-  return prisma.cycle.update({
+  if (cycle.status === CycleStatus.completed) return cycle;
+
+  const updated = await prisma.cycle.update({
     where: { id: cycleId },
     data: { status: CycleStatus.completed, completedAt: new Date() },
   });
+
+  await notifyCycleCompleted(cycle);
+  return updated;
 }
 
 export async function listCycles(
@@ -314,6 +349,46 @@ async function loadCycle(cycleId: string): Promise<CycleWithRounds> {
   };
 }
 
+type CycleCompletionContext = {
+  id: string;
+  cycleNumber: number;
+  group: {
+    id: string;
+    ownerId: string;
+    name: string;
+    settings: { autoOpenNextCycle: boolean } | null;
+  };
+};
+
+async function notifyCycleCompleted(cycle: CycleCompletionContext): Promise<void> {
+  const owner = await prisma.user.findUnique({ where: { id: cycle.group.ownerId } });
+  if (owner) {
+    sendWhatsApp(
+      owner.phone,
+      `Hi ${owner.firstName}, your "${cycle.group.name}" cycle #${cycle.cycleNumber} has been completed. Open the next cycle from your dashboard.`,
+    ).catch((e) =>
+      logger.warn({ err: e.message, cycleId: cycle.id }, 'cycle-completed WhatsApp enqueue failed'),
+    );
+  }
+
+  await notifyGroup(cycle.group.id, `Cycle #${cycle.cycleNumber} is complete.`);
+
+  if (cycle.group.settings?.autoOpenNextCycle) {
+    try {
+      const next = await openCycleInternal(cycle.group.id, { notify: false });
+      await notifyGroup(
+        cycle.group.id,
+        `Cycle #${next.cycleNumber} was opened automatically. The owner can start it when ready.`,
+      );
+    } catch (e) {
+      logger.warn(
+        { err: (e as Error).message, groupId: cycle.group.id, cycleId: cycle.id },
+        'auto-open next cycle failed',
+      );
+    }
+  }
+}
+
 /**
  * Called by contributions.service and payouts.service after a state
  * change. If all rounds in the cycle are `completed`, flip the cycle to
@@ -324,7 +399,14 @@ export async function autoCompleteIfDone(cycleId: string): Promise<void> {
     where: { id: cycleId },
     include: {
       rounds: { select: { status: true } },
-      group: { select: { id: true, ownerId: true, name: true, settings: { select: { autoOpenNextCycle: true } } } },
+      group: {
+        select: {
+          id: true,
+          ownerId: true,
+          name: true,
+          settings: { select: { autoOpenNextCycle: true } },
+        },
+      },
     },
   });
   if (!cycle) return;
@@ -337,32 +419,7 @@ export async function autoCompleteIfDone(cycleId: string): Promise<void> {
     data: { status: CycleStatus.completed, completedAt: new Date() },
   });
 
-  const owner = await prisma.user.findUnique({ where: { id: cycle.group.ownerId } });
-  if (owner) {
-    sendWhatsApp(
-      owner.phone,
-      `Hi ${owner.firstName}, your "${cycle.group.name}" cycle #${cycle.cycleNumber} has been completed. Open the next cycle from your dashboard.`,
-    ).catch((e) =>
-      logger.warn({ err: e.message, cycleId }, 'cycle-completed WhatsApp enqueue failed'),
-    );
-  }
-
-  notifyGroup(cycle.group.id, `Cycle #${cycle.cycleNumber} is complete.`);
-
-  if (cycle.group.settings?.autoOpenNextCycle) {
-    try {
-      const next = await openCycleInternal(cycle.group.id, { notify: false });
-      notifyGroup(
-        cycle.group.id,
-        `Cycle #${next.cycleNumber} was opened automatically. The owner can start it when ready.`,
-      );
-    } catch (e) {
-      logger.warn(
-        { err: (e as Error).message, groupId: cycle.group.id, cycleId },
-        'auto-open next cycle failed',
-      );
-    }
-  }
+  await notifyCycleCompleted(cycle);
 }
 
 // Re-export for use by contributions / payouts modules.

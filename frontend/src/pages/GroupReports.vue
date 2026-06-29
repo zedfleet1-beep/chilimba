@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
+import { useAuthStore } from '@/stores/auth';
 import { useGroupsStore } from '@/stores/groups';
 import * as reportsApi from '@/api/reports';
 import { formatNgwe } from '@/lib/money';
@@ -9,7 +10,14 @@ import { BarChart3, Users, AlertCircle, BookOpen, Table2, Download } from 'lucid
 import { formatRoundLabel } from '@/lib/roundLabels';
 
 const route = useRoute();
+const auth = useAuthStore();
 const groups = useGroupsStore();
+
+const myMember = computed(() => groups.members.find((m) => m.userId === auth.user?.id) ?? null);
+const canPickMember = computed(() => {
+  const role = myMember.value?.role;
+  return role === 'owner' || role === 'treasurer';
+});
 
 const tab = ref<'summary' | 'outstanding' | 'members' | 'loans' | 'ledger'>('summary');
 const loading = ref(false);
@@ -36,8 +44,8 @@ async function loadAll() {
       reportsApi.getLoanBook(groupId.value),
       reportsApi.getPayoutLedger(groupId.value),
     ]);
-    if (!selectedMemberId.value && groups.members[0]) {
-      selectedMemberId.value = groups.members[0].id;
+    if (!selectedMemberId.value) {
+      selectedMemberId.value = myMember.value?.id ?? groups.members[0]?.id ?? '';
     }
     if (selectedMemberId.value) {
       memberStatement.value = await reportsApi.getMemberStatement(groupId.value, selectedMemberId.value);
@@ -77,7 +85,13 @@ async function onDownloadPdf() {
   }
 }
 
-onMounted(loadAll);
+onMounted(() => {
+  const q = route.query.tab;
+  if (q === 'members' || q === 'summary' || q === 'outstanding' || q === 'loans' || q === 'ledger') {
+    tab.value = q;
+  }
+  loadAll();
+});
 watch(() => route.params.id, loadAll);
 watch(selectedMemberId, loadMemberStatement);
 </script>
@@ -94,7 +108,7 @@ watch(selectedMemberId, loadMemberStatement);
         v-for="t in [
           { id: 'summary', label: 'Cycle summary', icon: BarChart3 },
           { id: 'outstanding', label: 'Outstanding', icon: AlertCircle },
-          { id: 'members', label: 'Member statements', icon: Users },
+          { id: 'members', label: canPickMember ? 'Member statements' : 'My contributions', icon: Users },
           { id: 'loans', label: 'Loan book', icon: BookOpen },
           { id: 'ledger', label: 'Payout ledger', icon: Table2 },
         ] as const"
@@ -167,6 +181,7 @@ watch(selectedMemberId, loadMemberStatement);
 
       <div v-if="tab === 'members'" class="space-y-4">
         <select
+          v-if="canPickMember"
           v-model="selectedMemberId"
           class="h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm"
         >
@@ -174,6 +189,9 @@ watch(selectedMemberId, loadMemberStatement);
             {{ m.user?.firstName }} {{ m.user?.lastName }}
           </option>
         </select>
+        <p v-else-if="myMember" class="text-sm text-slate-600">
+          Your contribution and payout history for {{ myMember.user?.firstName }} {{ myMember.user?.lastName }}.
+        </p>
 
         <div v-if="memberStatement" class="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div class="bg-white rounded-2xl shadow-soft border border-warm-100 p-4">

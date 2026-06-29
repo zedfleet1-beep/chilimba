@@ -190,6 +190,76 @@ describeIf('cycles / contributions / payouts', () => {
     expect(cycle.status).toBe(CycleStatus.completed);
   });
 
+  it('manual complete notifies the linked WhatsApp group', async () => {
+    const { group, ownerToken } = await seedGroup(2, 1);
+    const whatsappJid = '120363000000000001@g.us';
+    await prisma.groupSetting.update({
+      where: { groupId: group.id },
+      data: { whatsappGroupJid: whatsappJid },
+    });
+
+    const opened = await request(app)
+      .post(`/api/v1/groups/${group.id}/cycles`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({});
+    const cycleId = opened.body.data.id as string;
+
+    await request(app)
+      .post(`/api/v1/groups/${group.id}/cycles/${cycleId}/start`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({});
+
+    const res = await request(app)
+      .post(`/api/v1/groups/${group.id}/cycles/${cycleId}/complete`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({});
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe(CycleStatus.completed);
+
+    const log = await prisma.whatsappLog.findFirst({
+      where: { toPhone: whatsappJid, message: { contains: 'Cycle #1 is complete.' } },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(log).not.toBeNull();
+  });
+
+  it('recording a contribution notifies the linked WhatsApp group', async () => {
+    const { group, members, ownerToken } = await seedGroup(2, 1);
+    const whatsappJid = '120363000000000002@g.us';
+    await prisma.groupSetting.update({
+      where: { groupId: group.id },
+      data: { whatsappGroupJid: whatsappJid },
+    });
+
+    const opened = await request(app)
+      .post(`/api/v1/groups/${group.id}/cycles`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({});
+    const cycleId = opened.body.data.id as string;
+    const roundId = opened.body.data.rounds[0].id as string;
+    const memberId = members[1].id;
+
+    await request(app)
+      .post(`/api/v1/groups/${group.id}/cycles/${cycleId}/start`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({});
+
+    const res = await request(app)
+      .post(`/api/v1/groups/${group.id}/cycles/${cycleId}/rounds/${roundId}/contributions/${memberId}/record`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({});
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe(ContributionStatus.paid);
+
+    const log = await prisma.whatsappLog.findFirst({
+      where: { toPhone: whatsappJid, message: { contains: 'Payment received from' } },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(log).not.toBeNull();
+  });
+
   it('owner cannot remove an unpaid member during an in-progress cycle', async () => {
     const { group, members, ownerToken } = await seedGroup(4, 2);
     const opened = await request(app)

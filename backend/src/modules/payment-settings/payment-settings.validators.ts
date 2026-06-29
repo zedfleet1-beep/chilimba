@@ -67,6 +67,12 @@ export const effectiveQuerySchema = z
   })
   .strict();
 
+export const contributionQuerySchema = z
+  .object({
+    groupId: z.string().uuid().optional(),
+  })
+  .strict();
+
 export const platformAccountNumberSchema = phoneSchema;
 
 export type PlatformDefaultInput = z.infer<typeof platformDefaultSchema>;

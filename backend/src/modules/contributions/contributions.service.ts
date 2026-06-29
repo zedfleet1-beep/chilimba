@@ -113,6 +113,18 @@ export async function uploadContributionProof(
             recordedById: requester.id,
           },
         });
+
+    const member = await prisma.groupMember.findUniqueOrThrow({
+      where: { id: memberId },
+      include: { user: { select: { firstName: true, lastName: true } } },
+    });
+    const settings = await prisma.groupSetting.findUniqueOrThrow({ where: { groupId } });
+    const frequency = settings.contributionFrequency as ContributionFrequency;
+    await notifyGroup(
+      groupId,
+      `${member.user.firstName} ${member.user.lastName} submitted proof of payment: ${formatNgwe(contribution.amountNgwe)} for ${formatRoundLabel(round.roundNumber, round.dueDate, frequency)}. Awaiting approval.`,
+    );
+
     return contribution;
   } catch (err) {
     // Clean up the orphan Cloudinary asset.
@@ -204,7 +216,7 @@ export async function recordContribution(
   );
 
   const frequency = settings.contributionFrequency as ContributionFrequency;
-  notifyGroup(
+  await notifyGroup(
     groupId,
     `Payment received from ${member.user.firstName} ${member.user.lastName}: ${formatNgwe(amount)} for ${formatRoundLabel(round.roundNumber, round.dueDate, frequency)}.`,
   );
@@ -281,7 +293,7 @@ export async function approveContribution(
   );
 
   const frequency = settings.contributionFrequency as ContributionFrequency;
-  notifyGroup(
+  await notifyGroup(
     groupId,
     `Payment received from ${memberUser.firstName} ${memberUser.lastName}: ${formatNgwe(contribution.amountNgwe)} for ${formatRoundLabel(round.roundNumber, round.dueDate, frequency)}.`,
   );

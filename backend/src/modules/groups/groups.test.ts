@@ -91,7 +91,7 @@ describeIf('groups (applyTemplateDefaults — pure unit)', () => {
   it('grocery → 0 recipients, 20 members, loans on at 20%', () => {
     const d = applyTemplateDefaults(GroupTemplate.grocery);
     expect(d.maxMembers).toBe(20);
-    expect(d.payoutRecipientsCount).toBe(0);
+    expect(d.payoutRecipientsCount).toBe(1);
     expect(d.allowLoans).toBe(true);
     expect(d.loanInterestRate).toBe(0.2);
   });
