@@ -166,7 +166,7 @@ export function applyTemplateDefaults(
       return {
         maxMembers: 20,
         contributionAmountNgwe: '100000',
-        payoutRecipientsCount: 1,
+        payoutRecipientsCount: 0,
         allowLoans: true,
         loanInterestRate: 0.2,
       };

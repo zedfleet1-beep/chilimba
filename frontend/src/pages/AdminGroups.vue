@@ -18,7 +18,7 @@ async function onReactivate(id: string) {
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="space-y-6 min-w-0">
     <div>
       <h2 class="font-display text-2xl font-bold text-slate-900">All groups</h2>
       <p class="text-sm text-slate-500">Read-only overview with suspend/reactivate controls.</p>
@@ -26,7 +26,7 @@ async function onReactivate(id: string) {
 
     <div v-if="admin.loading" class="text-slate-500">Loading…</div>
 
-    <div v-else class="bg-white rounded-2xl shadow-soft border border-warm-100 overflow-hidden">
+    <div v-else class="bg-white rounded-2xl shadow-soft border border-warm-100 table-scroll">
       <table class="w-full text-sm">
         <thead class="bg-warm-50 text-slate-600">
           <tr>

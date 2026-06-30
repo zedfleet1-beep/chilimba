@@ -69,6 +69,18 @@ export const useAdminInvoicesStore = defineStore('adminInvoices', () => {
     }
   }
 
+  async function recordCash(notes?: string): Promise<invoicesApi.ApprovePopResult | null> {
+    if (!current.value) return null;
+    try {
+      const result = await invoicesApi.recordCashPayment(current.value.id, notes);
+      current.value = await invoicesApi.getInvoice(current.value.id);
+      return result;
+    } catch (e) {
+      error.value = getErrorMessage(e);
+      return null;
+    }
+  }
+
   async function reject(popId: string, reason: string) {
     try {
       await invoicesApi.rejectPop(popId, reason);
@@ -80,5 +92,18 @@ export const useAdminInvoicesStore = defineStore('adminInvoices', () => {
     }
   }
 
-  return { invoices, current, filter, loading, error, filtered, fetchAll, fetchOne, createInvoice, approve, reject };
+  return {
+    invoices,
+    current,
+    filter,
+    loading,
+    error,
+    filtered,
+    fetchAll,
+    fetchOne,
+    createInvoice,
+    approve,
+    recordCash,
+    reject,
+  };
 });

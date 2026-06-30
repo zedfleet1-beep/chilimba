@@ -40,6 +40,12 @@ onMounted(() => store.fetchMine());
         </div>
         <div class="flex items-center gap-3">
           <span
+            v-if="inv.status === 'pending' && inv.paymentProofs?.[0]?.status === 'pending'"
+            class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-brand-50 text-brand-700"
+          >
+            POP submitted
+          </span>
+          <span
             class="px-2.5 py-0.5 rounded-full text-xs font-medium"
             :class="{
               'bg-warm-100 text-warm-600': inv.status === 'pending',

@@ -23,7 +23,7 @@ const theme = useThemeStore();
           <span class="text-2xl font-bold">Chilimba</span>
         </div>
       </div>
-      <div class="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8">
+      <div class="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4 sm:p-8 min-w-0 overflow-hidden">
         <slot />
       </div>
     </div>

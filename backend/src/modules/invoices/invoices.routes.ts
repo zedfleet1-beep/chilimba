@@ -19,6 +19,7 @@ import { isCloudinaryConfigured } from '@/lib/cloudinary';
 import {
   createInvoiceSchema,
   listInvoicesQuerySchema,
+  recordCashPaymentSchema,
 } from './invoices.validators';
 import {
   createInvoice,
@@ -26,6 +27,7 @@ import {
   getInvoice,
   getMyInvoices,
   uploadPop,
+  recordCashPayment,
 } from './invoices.service';
 
 const router = Router();
@@ -57,7 +59,6 @@ router.get(
 
 router.get(
   '/mine',
-  requireRole('super_admin'),
   ah(async (req, res) => {
     const invoices = await getMyInvoices(req.user!.id);
     res.json({ success: true, data: invoices });
@@ -66,10 +67,19 @@ router.get(
 
 router.get(
   '/:id',
-  requireRole('super_admin'),
   ah(async (req, res) => {
     const invoice = await getInvoice(req.params.id, req.user!.id);
     res.json({ success: true, data: invoice });
+  }),
+);
+
+router.post(
+  '/:id/record-cash',
+  requireRole('super_admin'),
+  ah(async (req, res) => {
+    const input = parseBody(recordCashPaymentSchema, req.body ?? {});
+    const result = await recordCashPayment(req.params.id, req.user!.id, input.notes);
+    res.json({ success: true, data: result });
   }),
 );
 
@@ -81,7 +91,6 @@ router.get(
  */
 router.post(
   '/:id/pop',
-  requireRole('super_admin'),
   // Fail fast with a clear error if Cloudinary isn't configured, rather
   // than letting multer consume the upload and then 500ing.
   (_req, res, next) => {

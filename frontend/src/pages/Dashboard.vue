@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue';
+import { onMounted } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useGroupsStore } from '@/stores/groups';
 import { useInvoicesStore } from '@/stores/invoices';
@@ -11,12 +11,8 @@ const auth = useAuthStore();
 const groups = useGroupsStore();
 const invoices = useInvoicesStore();
 const router = useRouter();
-const isSuperAdmin = computed(() => auth.user?.role === 'super_admin');
-
 onMounted(async () => {
-  const tasks = [groups.fetchMine()];
-  if (isSuperAdmin.value) tasks.push(invoices.fetchMine());
-  await Promise.all(tasks);
+  await Promise.all([groups.fetchMine(), invoices.fetchMine()]);
 });
 </script>
 
@@ -37,7 +33,6 @@ onMounted(async () => {
 
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       <button
-        v-if="isSuperAdmin"
         class="bg-white dark:bg-slate-900 rounded-2xl shadow-soft border border-warm-100 dark:border-slate-700 p-6 text-left hover:border-warm-200 dark:hover:border-slate-600 transition-colors"
         @click="router.push({ name: 'customer-invoices' })"
       >

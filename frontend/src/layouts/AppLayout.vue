@@ -38,7 +38,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/invoices', label: 'My invoices', icon: Receipt, adminOnly: true },
+  { to: '/invoices', label: 'My invoices', icon: Receipt },
   { to: '/groups', label: 'My group', icon: Users },
   { to: '/help', label: 'User guide', icon: BookOpen },
   { to: '/admin', label: 'Admin', icon: BarChart3, adminOnly: true },
@@ -147,7 +147,7 @@ async function onLogout() {
         </div>
       </header>
 
-      <main class="flex-1 p-4 md:p-8 overflow-y-auto">
+      <main class="flex-1 p-4 md:p-8 overflow-y-auto overflow-x-hidden min-w-0">
         <slot />
       </main>
     </div>

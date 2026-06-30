@@ -12,6 +12,17 @@ body {
   @apply bg-slate-50 text-slate-900 antialiased transition-colors duration-200;
 }
 
+@layer components {
+  .table-scroll {
+    @apply overflow-x-auto min-w-0;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .table-scroll > table {
+    @apply min-w-[42rem];
+  }
+}
+
 body.app-light {
   @apply bg-cream-50 text-slate-800;
 }

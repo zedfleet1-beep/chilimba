@@ -455,19 +455,30 @@ async function maybeAdvanceRoundStatus(roundId: string, cycleId: string): Promis
       statusByMember.get(id) === ContributionStatus.waived,
   );
 
+  const payouts = await prisma.cyclePayout.findMany({
+    where: { roundId },
+    select: { paidAt: true },
+  });
+  const hasPayouts = payouts.length > 0;
+
   if (round.status === RoundStatus.pending && allCollected) {
+    // Savings-pool groups keep money in the cycle — no per-round payout step.
+    if (!hasPayouts) {
+      await prisma.cycleRound.update({
+        where: { id: roundId },
+        data: { status: RoundStatus.completed },
+      });
+      await autoCompleteIfDone(cycleId);
+      return;
+    }
     await prisma.cycleRound.update({
       where: { id: roundId },
       data: { status: RoundStatus.collecting },
     });
   }
 
-  // Round becomes `completed` only when all payouts are paid.
-  const payouts = await prisma.cyclePayout.findMany({
-    where: { roundId },
-    select: { paidAt: true },
-  });
-  const allPayoutsPaid = payouts.length > 0 && payouts.every((p) => p.paidAt !== null);
+  // Rotating-cash groups: round completes only when all payouts are paid.
+  const allPayoutsPaid = hasPayouts && payouts.every((p) => p.paidAt !== null);
   if (allPayoutsPaid && round.status !== RoundStatus.completed) {
     await prisma.cycleRound.update({
       where: { id: roundId },

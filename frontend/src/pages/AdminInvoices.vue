@@ -26,7 +26,7 @@ async function onCreated() {
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="space-y-6 min-w-0">
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
       <div>
         <h2 class="font-display text-2xl font-bold text-slate-900">All invoices</h2>
@@ -67,7 +67,7 @@ async function onCreated() {
 
     <p v-if="store.error" class="text-sm text-red-600">{{ store.error }}</p>
 
-    <div class="bg-white rounded-2xl shadow-soft border border-warm-100 overflow-hidden">
+    <div class="bg-white rounded-2xl shadow-soft border border-warm-100 table-scroll">
       <table class="w-full text-sm">
         <thead class="bg-warm-50 text-slate-500 text-left">
           <tr>

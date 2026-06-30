@@ -28,6 +28,13 @@ export const listInvoicesQuerySchema = z
   })
   .strict();
 
+export const recordCashPaymentSchema = z
+  .object({
+    notes: z.string().max(500).optional(),
+  })
+  .strict();
+
 export type CreateInvoiceInput = z.infer<typeof createInvoiceSchema>;
 export type ListInvoicesQuery = z.infer<typeof listInvoicesQuerySchema>;
+export type RecordCashPaymentInput = z.infer<typeof recordCashPaymentSchema>;
 

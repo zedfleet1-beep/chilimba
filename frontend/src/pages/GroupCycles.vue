@@ -38,6 +38,7 @@ const selectedRound = computed(() => cycles.selectedRound);
 const contributionByMember = computed(() => new Map(cycles.contributions.map((item) => [item.memberId, item])));
 const frequency = computed(() => group.value?.settings?.contributionFrequency ?? 'monthly');
 const payoutRecipientCount = computed(() => group.value?.settings?.payoutRecipientsCount ?? 1);
+const isSavingsPool = computed(() => (group.value?.settings?.payoutRecipientsCount ?? 1) === 0);
 const isManualPayout = computed(() => group.value?.settings?.payoutMethod === 'manual');
 const myMember = computed(() => members.value.find((member) => member.userId === auth.user?.id) ?? null);
 const isTreasurer = computed(() => myRole.value === 'treasurer');
@@ -262,7 +263,16 @@ watch(() => route.params.id, loadForRoute);
               <span class="px-2 py-1 rounded-full bg-warm-50 text-slate-700">
                 {{ group.settings?.contributionFrequency ?? 'monthly' }}
               </span>
-              <span class="px-2 py-1 rounded-full bg-warm-50 text-slate-700">
+              <span
+                v-if="isSavingsPool"
+                class="px-2 py-1 rounded-full bg-warm-50 text-slate-700"
+              >
+                Savings pool · loans
+              </span>
+              <span
+                v-else
+                class="px-2 py-1 rounded-full bg-warm-50 text-slate-700"
+              >
                 {{ group.settings?.payoutRecipientsCount ?? 1 }} payout recipients
               </span>
             </div>
@@ -486,7 +496,37 @@ watch(() => route.params.id, loadForRoute);
           />
           </div>
 
-          <aside class="bg-white rounded-2xl shadow-soft border border-warm-100 p-4 space-y-4">
+          <aside
+            v-if="isSavingsPool"
+            class="bg-white rounded-2xl shadow-soft border border-warm-100 p-4 space-y-4"
+          >
+            <div>
+              <h3 class="font-display text-lg font-semibold text-slate-900">Savings pool</h3>
+              <p class="text-sm text-slate-500">
+                Contributions for {{ roundLabel(selectedRound.roundNumber, selectedRound.dueDate) }} stay in the group pot.
+              </p>
+              <p v-if="effectiveCollectedNgwe > 0n" class="text-xs text-slate-500 mt-2">
+                {{ formatNgwe(effectiveCollectedNgwe) }} collected this round
+                <span v-if="paidContributionsCount > 0"> · {{ paidContributionsCount }} paid</span>
+              </p>
+            </div>
+            <p class="text-sm text-slate-600">
+              No monthly payouts — members borrow from the pool during the cycle. When the cycle ends, the group takes the accumulated money (plus loan interest) for groceries or whatever you planned.
+            </p>
+            <router-link
+              v-if="group.settings?.allowLoans"
+              :to="{ name: 'group-loans', params: { id: groupId } }"
+              class="inline-flex items-center justify-center gap-2 w-full h-10 rounded-lg border border-brand-200 bg-brand-50 text-brand-800 text-sm font-medium hover:bg-brand-100"
+            >
+              <WalletCards class="w-4 h-4" />
+              View loans
+            </router-link>
+          </aside>
+
+          <aside
+            v-else
+            class="bg-white rounded-2xl shadow-soft border border-warm-100 p-4 space-y-4"
+          >
             <div>
               <h3 class="font-display text-lg font-semibold text-slate-900">Payouts</h3>
               <p class="text-sm text-slate-500">Recipients for {{ roundLabel(selectedRound.roundNumber, selectedRound.dueDate) }}</p>

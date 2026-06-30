@@ -67,6 +67,12 @@ export async function recordPayout(input: RecordPayoutInput): Promise<{
 
   const settings = round.cycle.group.settings;
   if (!settings) throw new ConflictError('NO_SETTINGS' as never, 'Group has no settings');
+  if (settings.payoutRecipientsCount <= 0) {
+    throw new ConflictError(
+      'PAYOUTS_DISABLED' as never,
+      'This group keeps contributions in the pool — there are no per-round payouts to record',
+    );
+  }
 
   // Recipients already exist for queue / random. For manual / voting
   // (out of scope) we'd accept them in the body.
@@ -200,6 +206,12 @@ export async function assignPayoutRecipients(
 
   const settings = round.cycle.group.settings;
   if (!settings) throw new ConflictError('NO_SETTINGS' as never, 'Group has no settings');
+  if (settings.payoutRecipientsCount <= 0) {
+    throw new ConflictError(
+      'PAYOUTS_DISABLED' as never,
+      'This group keeps contributions in the pool — there are no payout recipients to assign',
+    );
+  }
   if (settings.payoutMethod !== PayoutMethod.manual) {
     throw new ConflictError(
       'NOT_MANUAL' as never,
@@ -301,7 +313,15 @@ export async function rerollRandomPayouts(
   });
   if (!round) throw new NotFoundError('Round');
   if (round.cycleId !== cycleId || round.cycle.groupId !== groupId) throw new NotFoundError('Round');
-  if (round.cycle.group.settings?.payoutMethod !== PayoutMethod.random) {
+  const settings = round.cycle.group.settings;
+  if (!settings) throw new ConflictError('NO_SETTINGS' as never, 'Group has no settings');
+  if (settings.payoutRecipientsCount <= 0) {
+    throw new ConflictError(
+      'PAYOUTS_DISABLED' as never,
+      'This group keeps contributions in the pool — there are no payout recipients to re-roll',
+    );
+  }
+  if (settings.payoutMethod !== PayoutMethod.random) {
     throw new ConflictError(
       'NOT_RANDOM' as never,
       'Re-rolling is only available when payoutMethod is random',

@@ -23,6 +23,11 @@ const pop = computed(() => {
   const list = invoice.value?.paymentProofs ?? [];
   return list[0] ?? null;
 });
+const canUploadPop = computed(
+  () =>
+    invoice.value?.status === 'pending' &&
+    (!pop.value || pop.value.status === 'rejected'),
+);
 
 function onFile(e: Event) {
   const f = (e.target as HTMLInputElement).files?.[0];
@@ -97,7 +102,7 @@ async function onUpload() {
       />
 
       <!-- POP upload -->
-      <div v-if="invoice.status === 'pending'" class="bg-white rounded-2xl shadow-soft border border-warm-100 p-6">
+      <div v-if="canUploadPop" class="bg-white rounded-2xl shadow-soft border border-warm-100 p-6">
         <h3 class="font-display text-lg font-semibold text-slate-900 mb-1">Upload proof of payment</h3>
         <p class="text-sm text-slate-500 mb-4">JPG, PNG, or PDF up to 10 MB.</p>
 

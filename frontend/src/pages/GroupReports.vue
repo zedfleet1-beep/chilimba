@@ -235,7 +235,7 @@ watch(selectedMemberId, loadMemberStatement);
           </button>
         </div>
 
-        <div v-if="payoutLedger.rows.length" class="bg-white rounded-2xl shadow-soft border border-warm-100 overflow-x-auto">
+        <div v-if="payoutLedger.rows.length" class="bg-white rounded-2xl shadow-soft border border-warm-100 table-scroll">
           <table class="w-full text-sm">
             <thead>
               <tr class="border-b border-warm-50 text-left text-slate-500">

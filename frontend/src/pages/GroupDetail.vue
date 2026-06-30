@@ -82,7 +82,7 @@ async function onRemove(memberId: string) {
 </script>
 
 <template>
-  <div class="space-y-6 max-w-4xl">
+  <div class="space-y-6 max-w-4xl min-w-0">
     <div v-if="store.loading" class="text-slate-500">Loading…</div>
 
     <div v-else-if="!store.current" class="bg-white rounded-2xl shadow-soft border border-warm-100 p-10 text-center">
@@ -96,43 +96,47 @@ async function onRemove(memberId: string) {
 
     <template v-else>
       <!-- Header -->
-      <div class="bg-white rounded-2xl shadow-soft border border-warm-100 p-6">
-        <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-          <div>
+      <div class="bg-white rounded-2xl shadow-soft border border-warm-100 p-6 min-w-0">
+        <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 min-w-0">
+          <div class="min-w-0">
             <p class="text-xs text-slate-500 uppercase tracking-wide">{{ store.current.template.replace('_', ' ') }}</p>
-            <h2 class="font-display text-2xl font-bold text-slate-900">{{ store.current.name }}</h2>
-            <p v-if="store.current.description" class="text-sm text-slate-600 mt-1">{{ store.current.description }}</p>
+            <h2 class="font-display text-2xl font-bold text-slate-900 break-words">{{ store.current.name }}</h2>
+            <p v-if="store.current.description" class="text-sm text-slate-600 mt-1 break-words">{{ store.current.description }}</p>
           </div>
-          <div class="flex items-center gap-2">
+          <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto sm:justify-end shrink-0">
             <button
-              class="inline-flex items-center gap-1.5 px-3 h-9 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700"
+              class="inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3 h-9 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700"
+              :title="'Cycles'"
               @click="router.push({ name: 'group-cycles', params: { id: id } })"
             >
-              <RotateCw class="w-4 h-4" />
-              Cycles
+              <RotateCw class="w-4 h-4 shrink-0" />
+              <span class="hidden sm:inline">Cycles</span>
             </button>
             <button
-              class="inline-flex items-center gap-1.5 px-3 h-9 rounded-lg border border-slate-200 text-slate-700 text-sm hover:bg-warm-50"
+              class="inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3 h-9 rounded-lg border border-slate-200 text-slate-700 text-sm hover:bg-warm-50"
+              :title="'Reports'"
               @click="router.push({ name: 'group-reports', params: { id: id } })"
             >
-              <BarChart3 class="w-4 h-4" />
-              Reports
+              <BarChart3 class="w-4 h-4 shrink-0" />
+              <span class="hidden sm:inline">Reports</span>
             </button>
             <button
               v-if="store.current.settings?.allowLoans"
-              class="inline-flex items-center gap-1.5 px-3 h-9 rounded-lg border border-slate-200 text-slate-700 text-sm hover:bg-warm-50"
+              class="inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3 h-9 rounded-lg border border-slate-200 text-slate-700 text-sm hover:bg-warm-50"
+              :title="'Loans'"
               @click="router.push({ name: 'group-loans', params: { id: id } })"
             >
-              <HandCoins class="w-4 h-4" />
-              Loans
+              <HandCoins class="w-4 h-4 shrink-0" />
+              <span class="hidden sm:inline">Loans</span>
             </button>
             <button
               v-if="canEditSettings"
-              class="inline-flex items-center gap-1.5 px-3 h-9 rounded-lg border border-slate-200 text-slate-700 text-sm hover:bg-warm-50"
+              class="inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3 h-9 rounded-lg border border-slate-200 text-slate-700 text-sm hover:bg-warm-50"
+              title="Settings"
               @click="router.push({ name: 'group-settings', params: { id: id } })"
             >
-              <SettingsIcon class="w-4 h-4" />
-              Settings
+              <SettingsIcon class="w-4 h-4 shrink-0" />
+              <span class="hidden sm:inline">Settings</span>
             </button>
           </div>
         </div>

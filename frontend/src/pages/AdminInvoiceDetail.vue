@@ -5,7 +5,7 @@ import { useAdminInvoicesStore } from '@/stores/adminInvoices';
 import { refreshPopDownloadUrl } from '@/api/invoices';
 import { formatNgwe } from '@/lib/money';
 import { getErrorMessage } from '@/api/client';
-import { Check, X, Copy, ArrowLeft, FileText, ExternalLink } from 'lucide-vue-next';
+import { Check, X, Copy, ArrowLeft, FileText, ExternalLink, Banknote } from 'lucide-vue-next';
 import PaymentDetailsCard from '@/components/PaymentDetailsCard.vue';
 import type { PaymentProof } from '@/api/invoices';
 
@@ -17,6 +17,8 @@ const id = computed(() => String(route.params.id));
 const showReject = ref(false);
 const rejectReason = ref('');
 const approving = ref<string | null>(null);
+const recordingCash = ref(false);
+const cashNotes = ref('');
 const lastApproval = ref<{ token: string; link: string } | null>(null);
 const downloadUrl = ref<string | null>(null);
 const localError = ref('');
@@ -24,6 +26,28 @@ const localError = ref('');
 onMounted(() => store.fetchOne(id.value));
 
 const invoice = computed(() => store.current);
+const hasPendingPop = computed(
+  () => invoice.value?.paymentProofs?.some((pop) => pop.status === 'pending') ?? false,
+);
+
+async function recordCash() {
+  localError.value = '';
+  recordingCash.value = true;
+  try {
+    const result = await store.recordCash(cashNotes.value.trim() || undefined);
+    if (result) {
+      lastApproval.value = {
+        token: result.groupCreationToken,
+        link: result.groupCreationLink,
+      };
+      cashNotes.value = '';
+    }
+  } catch (e) {
+    localError.value = getErrorMessage(e);
+  } finally {
+    recordingCash.value = false;
+  }
+}
 
 async function approve(popId: string) {
   localError.value = '';
@@ -131,11 +155,38 @@ function fileIconFor(fileType: string) {
         :show-source="true"
       />
 
+      <!-- Cash payment (no POP upload) -->
+      <div
+        v-if="invoice.status === 'pending' && !hasPendingPop"
+        class="bg-white rounded-2xl shadow-soft border border-warm-100 p-6"
+      >
+        <h3 class="font-display text-lg font-semibold text-slate-900 mb-1">Received cash?</h3>
+        <p class="text-sm text-slate-500 mb-4">
+          If the customer paid you in cash and did not upload a screenshot, record it here to mark the invoice paid and send them the group-creation link.
+        </p>
+        <textarea
+          v-model="cashNotes"
+          rows="2"
+          class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none text-sm"
+          placeholder="Optional note, e.g. Paid in cash at office on 30 Jun"
+        />
+        <div class="flex justify-end mt-4">
+          <button
+            :disabled="recordingCash"
+            class="inline-flex items-center gap-2 px-4 h-10 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 disabled:opacity-50"
+            @click="recordCash"
+          >
+            <Banknote class="w-4 h-4" />
+            {{ recordingCash ? 'Recording…' : 'Record cash payment' }}
+          </button>
+        </div>
+      </div>
+
       <!-- POPs -->
       <div class="bg-white rounded-2xl shadow-soft border border-warm-100 p-6">
         <h3 class="font-display text-lg font-semibold text-slate-900 mb-4">Proofs of payment</h3>
         <p v-if="!invoice.paymentProofs?.length" class="text-sm text-slate-500">
-          No POPs uploaded yet.
+          No POPs uploaded yet. Use <strong>Record cash payment</strong> above if they paid in person.
         </p>
         <ul v-else class="divide-y divide-warm-50">
           <li v-for="pop in invoice.paymentProofs" :key="pop.id" class="py-3 flex items-center gap-3">

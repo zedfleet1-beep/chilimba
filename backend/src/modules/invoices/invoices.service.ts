@@ -9,7 +9,14 @@
  * frontend no longer does a two-step presigned-PUT roundtrip — the file
  * goes through the backend in one multipart POST.
  */
-import { Prisma, Invoice, PaymentProof, PaymentSetting, InvoiceStatus } from '@prisma/client';
+import {
+  Prisma,
+  Invoice,
+  PaymentProof,
+  PaymentSetting,
+  InvoiceStatus,
+  PaymentProofStatus,
+} from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { normalizePhone } from '@/lib/phone';
 import { sendWhatsApp } from '@/lib/whatsapp';
@@ -27,7 +34,8 @@ import {
   isCloudinaryConfigured,
   type CloudinaryResourceType,
 } from '@/lib/cloudinary';
-import { invoiceCreatedTemplate } from './templates/invoice-pop.templates';
+import { signGroupCreationToken } from '@/lib/jwt';
+import { invoiceCreatedTemplate, popApprovedTemplate } from './templates/invoice-pop.templates';
 import {
   CreateInvoiceInput,
   ListInvoicesQuery,
@@ -37,6 +45,13 @@ const MAX_INVOICE_NUMBER_RETRIES = 3;
 
 export interface PopUploadResult {
   paymentProof: PaymentProof;
+}
+
+export interface RecordCashPaymentResult {
+  invoice: Invoice;
+  paymentProof: PaymentProof;
+  groupCreationToken: string;
+  groupCreationLink: string;
 }
 
 /**
@@ -201,7 +216,8 @@ export async function listInvoices(query: ListInvoicesQuery): Promise<Invoice[]>
 }
 
 /**
- * Fetch a single invoice with its POPs. super_admin only.
+ * Fetch a single invoice with its POPs. super_admin sees any invoice;
+ * customers only see invoices tied to their phone number.
  * Embeds the effective paymentDetails (override → platform default).
  */
 export async function getInvoice(
@@ -209,14 +225,13 @@ export async function getInvoice(
   requesterUserId: string,
 ): Promise<Invoice & { paymentProofs: PaymentProof[]; paymentDetails: PaymentDetails | null }> {
   const requester = await prisma.user.findUniqueOrThrow({ where: { id: requesterUserId } });
-  if (requester.role !== 'super_admin') {
-    throw new ForbiddenError('Only super admins can view invoices');
-  }
   const invoice = await prisma.invoice.findUnique({
     where: { id },
     include: { paymentProofs: { orderBy: { createdAt: 'desc' } } },
   });
   if (!invoice) throw new NotFoundError('Invoice');
+
+  assertInvoiceAccess(requester, invoice.phone);
 
   const paymentDetails = await getEffectivePaymentDetails(id);
   return { ...invoice, paymentDetails };
@@ -269,9 +284,7 @@ export async function uploadPop(
   const requester = await prisma.user.findUniqueOrThrow({ where: { id: requesterUserId } });
   const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } });
   if (!invoice) throw new NotFoundError('Invoice');
-  if (requester.role !== 'super_admin') {
-    throw new ForbiddenError('Only super admins can upload invoice payment proofs');
-  }
+  assertInvoiceAccess(requester, invoice.phone);
   if (invoice.status !== InvoiceStatus.pending) {
     throw new ConflictError(
       'INVOICE_NOT_PENDING' as never,
@@ -306,6 +319,96 @@ export async function uploadPop(
   } catch (err) {
     await destroyAsset(upload.publicId, resourceType);
     throw err;
+  }
+}
+
+/**
+ * Admin records an in-person cash payment. Marks the invoice paid, creates an
+ * approved payment_proof audit row, and sends the group-creation WhatsApp.
+ */
+export async function recordCashPayment(
+  invoiceId: string,
+  reviewerId: string,
+  notes?: string,
+): Promise<RecordCashPaymentResult> {
+  const result = await prisma.$transaction(async (tx) => {
+    const invoice = await tx.invoice.findUnique({ where: { id: invoiceId } });
+    if (!invoice) throw new NotFoundError('Invoice');
+    if (invoice.status !== InvoiceStatus.pending) {
+      throw new ConflictError(
+        'INVOICE_NOT_PENDING' as never,
+        'This invoice is no longer pending',
+      );
+    }
+
+    const now = new Date();
+    await tx.paymentProof.updateMany({
+      where: { invoiceId, status: PaymentProofStatus.pending },
+      data: {
+        status: PaymentProofStatus.rejected,
+        reviewedById: reviewerId,
+        reviewedAt: now,
+        notes: 'Superseded by cash payment recorded by admin',
+      },
+    });
+
+    const paymentProof = await tx.paymentProof.create({
+      data: {
+        invoiceId,
+        uploadedById: reviewerId,
+        fileKey: `cash/${invoiceId}`,
+        fileUrl: null,
+        resourceType: null,
+        fileType: 'pdf',
+        status: PaymentProofStatus.approved,
+        reviewedById: reviewerId,
+        reviewedAt: now,
+        notes: notes?.trim() || 'Cash payment recorded by admin',
+      },
+    });
+    const updatedInvoice = await tx.invoice.update({
+      where: { id: invoiceId },
+      data: { status: InvoiceStatus.paid, paidAt: now },
+    });
+    return { paymentProof, invoice: updatedInvoice };
+  });
+
+  const groupCreationToken = signGroupCreationToken({
+    invoiceId: result.invoice.id,
+    phone: result.invoice.phone,
+  });
+  const groupCreationLink = `${env.WEB_BASE_URL}/create-group?token=${encodeURIComponent(groupCreationToken)}`;
+
+  sendWhatsApp(
+    result.invoice.phone,
+    popApprovedTemplate({
+      name: firstNameFromCustomerName(result.invoice.customerName),
+      invoiceNumber: result.invoice.invoiceNumber,
+      groupCreationLink,
+    }),
+  ).catch((e) =>
+    logger.warn({ err: e.message, invoiceId: result.invoice.id }, 'cash-payment WhatsApp enqueue failed'),
+  );
+
+  return {
+    invoice: result.invoice,
+    paymentProof: result.paymentProof,
+    groupCreationToken,
+    groupCreationLink,
+  };
+}
+
+function assertInvoiceAccess(
+  requester: { role: string; phone: string | null },
+  invoicePhone: string,
+): void {
+  if (requester.role === 'super_admin') return;
+  if (!requester.phone) {
+    throw new ForbiddenError('You do not have access to this invoice');
+  }
+  const phone = normalizePhone(requester.phone);
+  if (phone !== invoicePhone) {
+    throw new ForbiddenError('You do not have access to this invoice');
   }
 }
 

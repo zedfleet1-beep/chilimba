@@ -157,7 +157,7 @@ describeIf('invoices', () => {
     expect(res.status).toBe(403);
   });
 
-  it('customer cannot read their own invoice (super_admin only)', async () => {
+  it('customer can read their own invoice', async () => {
     const admin = await adminToken();
     const created = await request(app)
       .post('/api/v1/invoices')
@@ -168,10 +168,12 @@ describeIf('invoices', () => {
     const res = await request(app)
       .get(`/api/v1/invoices/${created.body.data.id}`)
       .set('Authorization', `Bearer ${token}`);
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
+    expect(res.body.data.id).toBe(created.body.data.id);
+    expect(res.body.data.paymentProofs).toEqual([]);
   });
 
-  it('GET /invoices/mine is super_admin only', async () => {
+  it('GET /invoices/mine returns only the caller invoices', async () => {
     const admin = await adminToken();
     await request(app)
       .post('/api/v1/invoices')
@@ -183,16 +185,13 @@ describeIf('invoices', () => {
       .send({ customerName: 'B', phone: OTHER_CUSTOMER_PHONE, amountNgwe: 100 });
 
     const customer = await customerToken();
-    const denied = await request(app)
+    const res = await request(app)
       .get('/api/v1/invoices/mine')
       .set('Authorization', `Bearer ${customer}`);
-    expect(denied.status).toBe(403);
-
-    const allowed = await request(app)
-      .get('/api/v1/invoices/mine')
-      .set('Authorization', `Bearer ${admin}`);
-    expect(allowed.status).toBe(200);
-    expect(Array.isArray(allowed.body.data)).toBe(true);
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.data)).toBe(true);
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.data[0].phone).toBe(CUSTOMER_PHONE);
   });
 
   it('POST /invoices/:id/pop (multipart) creates a payment_proofs row with status=pending', async () => {
@@ -246,7 +245,7 @@ describeIf('invoices', () => {
     expect(res.status).toBe(409);
   });
 
-  it('customer cannot upload POP (403)', async () => {
+  it('customer can upload POP for their own invoice', async () => {
     const admin = await adminToken();
     const created = await request(app)
       .post('/api/v1/invoices')
@@ -254,6 +253,62 @@ describeIf('invoices', () => {
       .send({ customerName: 'Mary', phone: CUSTOMER_PHONE, amountNgwe: 100 });
 
     const token = await customerToken();
+    const tinyPng = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+      'base64',
+    );
+    const res = await request(app)
+      .post(`/api/v1/invoices/${created.body.data.id}/pop`)
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', tinyPng, { filename: 'proof.png', contentType: 'image/png' });
+    if (res.status === 503) return;
+    expect(res.status).toBe(201);
+    expect(res.body.data.status).toBe('pending');
+    expect(res.body.data.invoiceId).toBe(created.body.data.id);
+  });
+
+  it('admin can record cash payment on a pending invoice', async () => {
+    const admin = await adminToken();
+    const created = await request(app)
+      .post('/api/v1/invoices')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ customerName: 'Mary', phone: CUSTOMER_PHONE, amountNgwe: 100 });
+
+    const res = await request(app)
+      .post(`/api/v1/invoices/${created.body.data.id}/record-cash`)
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ notes: 'Paid in cash at office' });
+    expect(res.status).toBe(200);
+    expect(res.body.data.invoice.status).toBe('paid');
+    expect(res.body.data.paymentProof.status).toBe('approved');
+    expect(res.body.data.paymentProof.notes).toBe('Paid in cash at office');
+    expect(res.body.data.groupCreationToken).toBeTruthy();
+    expect(res.body.data.groupCreationLink).toContain('/create-group?token=');
+  });
+
+  it('customer cannot record cash payment (403)', async () => {
+    const admin = await adminToken();
+    const created = await request(app)
+      .post('/api/v1/invoices')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ customerName: 'Mary', phone: CUSTOMER_PHONE, amountNgwe: 100 });
+
+    const token = await customerToken();
+    const res = await request(app)
+      .post(`/api/v1/invoices/${created.body.data.id}/record-cash`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({});
+    expect(res.status).toBe(403);
+  });
+
+  it('customer cannot upload POP for someone else invoice (403)', async () => {
+    const admin = await adminToken();
+    const created = await request(app)
+      .post('/api/v1/invoices')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ customerName: 'Mary', phone: CUSTOMER_PHONE, amountNgwe: 100 });
+
+    const token = await customerToken(OTHER_CUSTOMER_PHONE, 'Other');
     const tinyPng = Buffer.from(
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
       'base64',

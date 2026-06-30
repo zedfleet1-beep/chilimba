@@ -36,7 +36,9 @@ export interface GenerateRoundsInput {
 }
 
 export function roundsCount(memberCount: number, payoutRecipientsCount: number): number {
-  if (memberCount <= 0 || payoutRecipientsCount <= 0) return 0;
+  if (memberCount <= 0) return 0;
+  // Savings-pool groups (0 payout recipients): one contribution round per member.
+  if (payoutRecipientsCount <= 0) return memberCount;
   return Math.ceil(memberCount / payoutRecipientsCount);
 }
 

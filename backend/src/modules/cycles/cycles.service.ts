@@ -77,13 +77,10 @@ async function openCycleInternal(
       'Add at least one active member before opening a cycle',
     );
   }
-  if (group.settings.payoutRecipientsCount <= 0) {
-    throw new ConflictError(
-      'INVALID_PAYOUT_SETTINGS' as never,
-      'Set payout recipients to at least 1 in Group settings before opening a cycle',
-    );
-  }
-  if (group.members.length < group.settings.payoutRecipientsCount) {
+  if (
+    group.settings.payoutRecipientsCount > 0 &&
+    group.members.length < group.settings.payoutRecipientsCount
+  ) {
     throw new ConflictError(
       'INSUFFICIENT_MEMBERS' as never,
       `Add at least ${group.settings.payoutRecipientsCount} members (or lower payout recipients in Group settings). You currently have ${group.members.length}.`,

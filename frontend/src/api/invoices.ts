@@ -112,6 +112,17 @@ export interface ApprovePopResult {
   groupCreationLink: string;
 }
 
+export async function recordCashPayment(
+  invoiceId: string,
+  notes?: string,
+): Promise<ApprovePopResult> {
+  const { data } = await api.post<{ success: true; data: ApprovePopResult }>(
+    `/invoices/${invoiceId}/record-cash`,
+    notes ? { notes } : {},
+  );
+  return data.data;
+}
+
 export async function approvePop(popId: string): Promise<ApprovePopResult> {
   const { data } = await api.post<{ success: true; data: ApprovePopResult }>(
     `/admin/pops/${popId}/approve`,
