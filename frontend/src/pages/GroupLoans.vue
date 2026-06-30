@@ -7,6 +7,7 @@ import * as loansApi from '@/api/loans';
 import { formatNgwe, parseNgwe } from '@/lib/money';
 import { getErrorMessage } from '@/api/client';
 import { HandCoins, Plus, Check, X } from 'lucide-vue-next';
+import GroupPicker from '@/components/GroupPicker.vue';
 
 const route = useRoute();
 const auth = useAuthStore();
@@ -31,6 +32,7 @@ async function load() {
   loading.value = true;
   error.value = '';
   try {
+    await groups.fetchMine();
     await groups.fetchOne(groupId.value);
     [loans.value, eligibility.value] = await Promise.all([
       loansApi.listLoans(groupId.value),
@@ -115,7 +117,9 @@ watch(() => route.params.id, load);
 </script>
 
 <template>
-  <div class="max-w-4xl space-y-6">
+  <div class="max-w-4xl space-y-6 min-w-0">
+    <GroupPicker />
+
     <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
       <div>
         <h2 class="font-display text-2xl font-bold text-slate-900">Loans</h2>

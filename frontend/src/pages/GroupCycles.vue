@@ -12,6 +12,7 @@ import { getErrorMessage } from '@/api/client';
 import ContributionPayModal from '@/components/ContributionPayModal.vue';
 import ProofPreviewModal from '@/components/ProofPreviewModal.vue';
 import MemberContributionsPanel from '@/components/MemberContributionsPanel.vue';
+import GroupPicker from '@/components/GroupPicker.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -110,12 +111,12 @@ async function loadForRoute() {
   localError.value = '';
   if (!groupId.value) {
     await groups.fetchMine();
-    const firstGroup = groups.groups[0];
-    if (firstGroup) {
-      router.replace({ name: 'group-cycles', params: { id: firstGroup.id } });
+    if (groups.activeGroupId) {
+      router.replace({ name: 'group-cycles', params: { id: groups.activeGroupId } });
     }
     return;
   }
+  await groups.fetchMine();
   await groups.fetchOne(groupId.value);
   await cycles.fetchCycles(groupId.value);
 }
@@ -251,6 +252,8 @@ watch(() => route.params.id, loadForRoute);
     </div>
 
     <template v-else>
+      <GroupPicker />
+
       <div class="bg-white rounded-2xl shadow-soft border border-warm-100 p-6">
         <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
           <div>

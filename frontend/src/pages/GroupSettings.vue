@@ -13,6 +13,7 @@ import * as groupsApi from '@/api/groups';
 import { getContributionDefault } from '@/api/paymentSettings';
 import type { PaymentDetails } from '@/lib/payment';
 import type { PaymentSettingRow } from '@/api/paymentSettings';
+import GroupPicker from '@/components/GroupPicker.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -40,6 +41,7 @@ async function loadPaymentDetails() {
 }
 
 onMounted(async () => {
+  await store.fetchMine();
   await store.fetchOne(id.value);
   const myRole = store.current?.members?.find((m) => m.userId === auth.user?.id)?.role;
   if (myRole !== 'owner') {
@@ -127,7 +129,9 @@ watch(saved, (v) => {
 </script>
 
 <template>
-  <div class="space-y-6 max-w-2xl">
+  <div class="space-y-6 max-w-2xl min-w-0">
+    <GroupPicker />
+
     <button
       class="inline-flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900"
       @click="router.push({ name: 'group-detail', params: { id: id } })"

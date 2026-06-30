@@ -8,6 +8,7 @@ import { formatNgwe } from '@/lib/money';
 import { getErrorMessage } from '@/api/client';
 import { BarChart3, Users, AlertCircle, BookOpen, Table2, Download } from 'lucide-vue-next';
 import { formatRoundLabel } from '@/lib/roundLabels';
+import GroupPicker from '@/components/GroupPicker.vue';
 
 const route = useRoute();
 const auth = useAuthStore();
@@ -37,6 +38,7 @@ async function loadAll() {
   loading.value = true;
   error.value = '';
   try {
+    await groups.fetchMine();
     await groups.fetchOne(groupId.value);
     [summary.value, outstanding.value, loanBook.value, payoutLedger.value] = await Promise.all([
       reportsApi.getCycleSummary(groupId.value),
@@ -97,7 +99,9 @@ watch(selectedMemberId, loadMemberStatement);
 </script>
 
 <template>
-  <div class="max-w-6xl space-y-6">
+  <div class="max-w-6xl space-y-6 min-w-0">
+    <GroupPicker />
+
     <div>
       <h2 class="font-display text-2xl font-bold text-slate-900">Reports</h2>
       <p class="text-sm text-slate-500">{{ groups.current?.name ?? 'Group' }} — cycle summaries, outstanding, and loans.</p>

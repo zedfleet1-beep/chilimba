@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import { useGroupsStore } from '@/stores/groups';
 import { useThemeStore } from '@/stores/theme';
 import {
   Coins,
@@ -22,9 +23,16 @@ import {
 import { ref } from 'vue';
 
 const auth = useAuthStore();
+const groups = useGroupsStore();
 const theme = useThemeStore();
 const router = useRouter();
 const route = useRoute();
+
+onMounted(() => {
+  if (auth.isAuthenticated && !groups.groups.length) {
+    void groups.fetchMine();
+  }
+});
 
 const sidebarOpen = ref(false);
 const isSuperAdmin = computed(() => auth.user?.role === 'super_admin');
@@ -49,7 +57,18 @@ const navItems: NavItem[] = [
   { to: '/admin/whatsapp-logs', label: 'WhatsApp logs', icon: MessageSquare, adminOnly: true },
 ];
 
-const visibleNav = computed(() => navItems.filter((n) => !n.adminOnly || isSuperAdmin.value));
+const visibleNav = computed(() =>
+  navItems
+    .filter((n) => !n.adminOnly || isSuperAdmin.value)
+    .map((item) =>
+      item.to === '/groups'
+        ? {
+            ...item,
+            to: groups.activeGroupId ? `/groups/${groups.activeGroupId}` : '/groups',
+          }
+        : item,
+    ),
+);
 
 const pageTitle = computed(() => {
   if (route.meta.title) return String(route.meta.title);
@@ -63,6 +82,7 @@ function isActive(to: string) {
 
 async function onLogout() {
   await auth.logout();
+  groups.clearSelection();
   router.push({ name: 'login' });
 }
 

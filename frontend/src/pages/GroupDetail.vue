@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth';
 import { formatNgwe } from '@/lib/money';
 import { getErrorMessage } from '@/api/client';
 import { Plus, Settings as SettingsIcon, Users as UsersIcon, Trash2, X, RotateCw, BarChart3, HandCoins } from 'lucide-vue-next';
+import GroupPicker from '@/components/GroupPicker.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -26,17 +27,17 @@ async function loadGroup() {
   if (!auth.isAuthenticated) return;
   if (id.value === 'list' || !id.value || id.value === 'undefined') {
     await store.fetchMine();
-    if (store.groups.length > 0) {
-      router.replace({ name: 'group-detail', params: { id: store.groups[0].id } });
+    if (store.activeGroupId) {
+      router.replace({ name: 'group-detail', params: { id: store.activeGroupId } });
     }
     return;
   }
+  await store.fetchMine();
   await store.fetchOne(id.value);
   if (store.error?.toLowerCase().includes('not a member')) {
-    await store.fetchMine();
     const allowed = store.groups.find((g) => g.id === id.value);
-    if (!allowed && store.groups[0]) {
-      router.replace({ name: 'group-detail', params: { id: store.groups[0].id } });
+    if (!allowed && store.activeGroupId) {
+      router.replace({ name: 'group-detail', params: { id: store.activeGroupId } });
     }
   }
 }
@@ -103,7 +104,9 @@ async function onRemove(memberId: string) {
             <h2 class="font-display text-2xl font-bold text-slate-900 break-words">{{ store.current.name }}</h2>
             <p v-if="store.current.description" class="text-sm text-slate-600 mt-1 break-words">{{ store.current.description }}</p>
           </div>
-          <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto sm:justify-end shrink-0">
+          <div class="flex flex-col gap-2 w-full min-w-0 sm:w-auto sm:items-end">
+            <GroupPicker inline />
+            <div class="flex flex-wrap items-center gap-2 w-full sm:justify-end min-w-0">
             <button
               class="inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3 h-9 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700"
               :title="'Cycles'"
@@ -138,6 +141,7 @@ async function onRemove(memberId: string) {
               <SettingsIcon class="w-4 h-4 shrink-0" />
               <span class="hidden sm:inline">Settings</span>
             </button>
+            </div>
           </div>
         </div>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5 pt-5 border-t border-warm-50">

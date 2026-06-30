@@ -54,7 +54,7 @@ onMounted(async () => {
 
       <button
         class="bg-white dark:bg-slate-900 rounded-2xl shadow-soft border border-warm-100 dark:border-slate-700 p-6 text-left hover:border-warm-200 dark:hover:border-slate-600 transition-colors"
-        @click="groups.groups[0] ? router.push({ name: 'group-detail', params: { id: groups.groups[0].id } }) : router.push({ name: 'group-list' })"
+        @click="groups.activeGroupId ? router.push({ name: 'group-detail', params: { id: groups.activeGroupId } }) : router.push({ name: 'group-list' })"
       >
         <div class="flex items-center justify-between mb-3">
           <div class="w-10 h-10 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center">
@@ -63,8 +63,9 @@ onMounted(async () => {
           <ArrowRight class="w-4 h-4 text-slate-400" />
         </div>
         <p class="font-display text-lg font-semibold text-slate-900">My group</p>
-        <p v-if="groups.groups[0]" class="text-sm text-slate-500 mt-1">
-          {{ groups.groups[0].name }} · {{ groups.groups[0].memberCount }} members
+        <p v-if="groups.activeGroup" class="text-sm text-slate-500 mt-1">
+          {{ groups.activeGroup.name }} · {{ groups.activeGroup.memberCount }} members
+          <span v-if="groups.groups.length > 1" class="text-slate-400"> · {{ groups.groups.length }} groups</span>
         </p>
         <p v-else class="text-sm text-slate-500 mt-1">
           No group yet. Pay an invoice to get started.
@@ -72,9 +73,9 @@ onMounted(async () => {
       </button>
 
       <button
-        v-if="groups.groups[0]"
+        v-if="groups.activeGroupId"
         class="bg-white dark:bg-slate-900 rounded-2xl shadow-soft border border-warm-100 dark:border-slate-700 p-6 text-left hover:border-warm-200 dark:hover:border-slate-600 transition-colors"
-        @click="router.push({ name: 'group-cycles', params: { id: groups.groups[0].id } })"
+        @click="router.push({ name: 'group-cycles', params: { id: groups.activeGroupId } })"
       >
         <div class="flex items-center justify-between mb-3">
           <div class="w-10 h-10 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center">
@@ -89,9 +90,9 @@ onMounted(async () => {
       </button>
 
       <button
-        v-if="groups.groups[0]"
+        v-if="groups.activeGroupId"
         class="bg-white dark:bg-slate-900 rounded-2xl shadow-soft border border-warm-100 dark:border-slate-700 p-6 text-left hover:border-warm-200 dark:hover:border-slate-600 transition-colors"
-        @click="router.push({ name: 'group-reports', params: { id: groups.groups[0].id } })"
+        @click="router.push({ name: 'group-reports', params: { id: groups.activeGroupId } })"
       >
         <div class="flex items-center justify-between mb-3">
           <div class="w-10 h-10 rounded-lg bg-warm-50 text-warm-600 flex items-center justify-center">
