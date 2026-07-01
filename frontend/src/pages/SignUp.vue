@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref, computed, onMounted } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { getErrorMessage } from '@/api/client';
 import AuthLayout from '@/layouts/AuthLayout.vue';
@@ -9,7 +9,15 @@ import PasswordInput from '@/components/PasswordInput.vue';
 import { ArrowRight, Check } from 'lucide-vue-next';
 
 const auth = useAuthStore();
+const route = useRoute();
 const router = useRouter();
+
+onMounted(() => {
+  const invitedPhone = route.query.phone;
+  if (typeof invitedPhone === 'string' && invitedPhone.trim()) {
+    router.replace({ name: 'activate', query: { phone: invitedPhone } });
+  }
+});
 
 const firstName = ref('');
 const lastName = ref('');

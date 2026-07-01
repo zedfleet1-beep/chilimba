@@ -11,6 +11,8 @@ export type ErrorCode =
   | 'WEAK_PASSWORD'
   | 'CONSENT_REQUIRED'
   | 'PHONE_ALREADY_EXISTS'
+  | 'ALREADY_ACTIVATED'
+  | 'ACTIVATION_NOT_AVAILABLE'
   | 'INVALID_OTP'
   | 'OTP_EXPIRED'
   | 'OTP_LOCKED'
@@ -65,6 +67,14 @@ export class ForbiddenError extends AppError {
 export class NotFoundError extends AppError {
   constructor(resource: string) {
     super(404, 'NOT_FOUND', `${resource} not found`);
+  }
+}
+
+export class ActivationNotAvailableError extends AppError {
+  constructor(
+    message = 'No account found for this number. Ask your group admin to add you, or create a new account.',
+  ) {
+    super(404, 'ACTIVATION_NOT_AVAILABLE', message);
   }
 }
 

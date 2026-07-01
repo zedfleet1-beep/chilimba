@@ -12,6 +12,7 @@ import { signAccessToken, signRefreshToken, verifyRefreshToken, Role } from '@/l
 import { sendWhatsApp, otpTemplate, welcomeTemplate, passwordResetTemplate } from '@/lib/whatsapp';
 import { assertResendAllowed, createOtp, verifyOtp } from './otp.service';
 import {
+  ActivationNotAvailableError,
   ConflictError,
   InvalidCredentialsError,
   NotFoundError,
@@ -23,7 +24,14 @@ import {
 } from '@/lib/errors';
 import { OtpPurpose, User, UserStatus } from '@prisma/client';
 import { logger } from '@/lib/logger';
-import { SignupInput, LoginInput, VerifyOtpInput, ResetInput, ForgotInput } from './auth.validators';
+import {
+  SignupInput,
+  LoginInput,
+  VerifyOtpInput,
+  ResetInput,
+  ForgotInput,
+  ActivateCompleteInput,
+} from './auth.validators';
 
 // In-memory refresh-token blacklist (Phase 2 will move to Redis).
 const revokedRefreshTokens = new Set<string>();
@@ -190,6 +198,66 @@ export async function logout(refreshToken: string): Promise<{ ok: true }> {
     if (first) revokedRefreshTokens.delete(first);
   }
   return { ok: true };
+}
+
+// =============================================================================
+// ACTIVATE (invited group members: verify phone + set password)
+// =============================================================================
+
+async function findPendingInvitedUser(phone: string) {
+  return prisma.user.findUnique({
+    where: { phone },
+    include: { groupMembers: { where: { status: 'active' }, take: 1 } },
+  });
+}
+
+export async function requestActivationOtp(phoneInput: string): Promise<{ ok: true }> {
+  const phone = normalizePhone(phoneInput);
+  const user = await findPendingInvitedUser(phone);
+  if (!user) {
+    throw new ActivationNotAvailableError();
+  }
+  if (user.otpVerified) {
+    throw new ConflictError('ALREADY_ACTIVATED', 'This account is already set up. Sign in with your password.');
+  }
+  if (user.groupMembers.length === 0) {
+    throw new ActivationNotAvailableError(
+      'No group invitation found for this number. If you signed up yourself, verify your phone from the sign-in page.',
+    );
+  }
+
+  await assertResendAllowed(user.id);
+  const { code } = await createOtp(user.id, OtpPurpose.signup);
+  await sendWhatsApp(phone, otpTemplate(code));
+  return { ok: true };
+}
+
+export async function completeActivation(input: ActivateCompleteInput): Promise<AuthResult> {
+  const phone = normalizePhone(input.phone);
+  const user = await findPendingInvitedUser(phone);
+  if (!user) {
+    throw new ActivationNotAvailableError();
+  }
+  if (user.otpVerified) {
+    throw new ConflictError('ALREADY_ACTIVATED', 'This account is already set up. Sign in with your password.');
+  }
+  if (user.groupMembers.length === 0) {
+    throw new ActivationNotAvailableError('No group invitation found for this number.');
+  }
+
+  await verifyOtp(user.id, input.code, OtpPurpose.signup);
+  const passwordHash = await hashPassword(input.password);
+  const updated = await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordHash, otpVerified: true },
+  });
+
+  sendWhatsApp(updated.phone, welcomeTemplate(updated.firstName, updated.phone)).catch((e) =>
+    logger.warn({ err: e.message }, 'welcome message enqueue failed'),
+  );
+
+  const { accessToken, refreshToken } = issueTokens(updated);
+  return { user: toPublicUser(updated), accessToken, refreshToken };
 }
 
 // =============================================================================

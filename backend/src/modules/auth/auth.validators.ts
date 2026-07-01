@@ -71,6 +71,23 @@ export const resetSchema = z
   })
   .strict();
 
+export const activateRequestSchema = z
+  .object({
+    phone: phoneSchema,
+  })
+  .strict();
+
+export const activateCompleteSchema = z
+  .object({
+    phone: phoneSchema,
+    code: z.string().regex(/^\d{6}$/, 'Code must be 6 digits'),
+    password: passwordSchema,
+    consent: z.literal(true, {
+      errorMap: () => ({ message: 'You must consent to receive WhatsApp messages' }),
+    }),
+  })
+  .strict();
+
 export type SignupInput = z.infer<typeof signupSchema>;
 export type RequestOtpInput = z.infer<typeof requestOtpSchema>;
 export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
@@ -79,3 +96,5 @@ export type RefreshInput = z.infer<typeof refreshSchema>;
 export type LogoutInput = z.infer<typeof logoutSchema>;
 export type ForgotInput = z.infer<typeof forgotSchema>;
 export type ResetInput = z.infer<typeof resetSchema>;
+export type ActivateRequestInput = z.infer<typeof activateRequestSchema>;
+export type ActivateCompleteInput = z.infer<typeof activateCompleteSchema>;

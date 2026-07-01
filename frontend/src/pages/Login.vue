@@ -6,7 +6,7 @@ import { getErrorCode, getErrorMessage } from '@/api/client';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import PhoneInput from '@/components/PhoneInput.vue';
 import PasswordInput from '@/components/PasswordInput.vue';
-import { ArrowRight, ShieldCheck } from 'lucide-vue-next';
+import { ArrowRight, ShieldCheck, UserPlus } from 'lucide-vue-next';
 
 const auth = useAuthStore();
 const router = useRouter();
@@ -61,16 +61,24 @@ function goToVerify() {
           <div class="flex-1">
             <p class="text-sm font-medium text-amber-900">Phone not verified yet</p>
             <p class="text-xs text-amber-800 mt-1">
-              We sent a 6-digit code to your WhatsApp when you signed up. Enter it to finish setting up your account.
+              We sent a 6-digit code to your WhatsApp. Enter it to finish setting up your account.
             </p>
-            <button
-              type="button"
-              @click="goToVerify"
-              class="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-amber-900 hover:text-amber-700"
-            >
-              <ShieldCheck class="w-4 h-4" />
-              Verify your phone →
-            </button>
+            <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1">
+              <button
+                type="button"
+                @click="goToVerify"
+                class="inline-flex items-center gap-1.5 text-sm font-medium text-amber-900 hover:text-amber-700"
+              >
+                <ShieldCheck class="w-4 h-4" />
+                Verify your phone →
+              </button>
+              <router-link
+                :to="{ name: 'activate', query: phone ? { phone } : undefined }"
+                class="inline-flex items-center gap-1.5 text-sm font-medium text-amber-900 hover:text-amber-700"
+              >
+                Added by your admin? Set password →
+              </router-link>
+            </div>
           </div>
         </div>
       </div>
@@ -89,5 +97,25 @@ function goToVerify() {
         <router-link to="/signup" class="text-brand-600 hover:underline">Create one</router-link>
       </p>
     </form>
+
+    <div class="mt-6 pt-6 border-t border-slate-200">
+      <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <div class="flex items-start gap-3">
+          <UserPlus class="w-5 h-5 text-brand-600 mt-0.5 flex-shrink-0" />
+          <div class="flex-1">
+            <p class="text-sm font-medium text-slate-900">Added to a group by your admin?</p>
+            <p class="text-xs text-slate-600 mt-1">
+              Verify your WhatsApp number and set a password to access your group.
+            </p>
+            <router-link
+              :to="{ name: 'activate', query: phone ? { phone } : undefined }"
+              class="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:text-brand-700"
+            >
+              Verify number &amp; set password →
+            </router-link>
+          </div>
+        </div>
+      </div>
+    </div>
   </AuthLayout>
 </template>

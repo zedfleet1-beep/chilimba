@@ -70,3 +70,18 @@ export async function me(): Promise<PublicUser> {
   const { data } = await api.get<{ success: true; data: PublicUser }>('/auth/me');
   return data.data;
 }
+
+export async function requestActivationOtp(phone: string): Promise<{ ok: true }> {
+  const { data } = await api.post<{ success: true; data: { ok: true } }>('/auth/activate/request', { phone });
+  return data.data;
+}
+
+export async function completeActivation(input: {
+  phone: string;
+  code: string;
+  password: string;
+  consent: true;
+}): Promise<AuthResponse> {
+  const { data } = await api.post<{ success: true; data: AuthResponse }>('/auth/activate/complete', input);
+  return data.data;
+}

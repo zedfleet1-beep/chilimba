@@ -116,7 +116,7 @@ export async function addMember(
         if (!u.otpVerified) {
           await sendWhatsApp(
             phone,
-            `Hi ${input.firstName}, you've been invited to join a Chilimba savings group. Sign up to get started: ${process.env.WEB_BASE_URL ?? 'http://localhost:5173'}/signup?phone=${encodeURIComponent(phone)}`,
+            `Hi ${input.firstName}, you've been added to a Chilimba savings group. Verify your number and set your password: ${process.env.WEB_BASE_URL ?? 'http://localhost:5173'}/activate?phone=${encodeURIComponent(phone)}`,
           );
         }
       } catch (e) {

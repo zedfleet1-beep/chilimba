@@ -106,6 +106,16 @@ export const useAuthStore = defineStore('auth', () => {
     clearSession();
   }
 
+  async function requestActivationOtp(phone: string) {
+    return authApi.requestActivationOtp(phone);
+  }
+
+  async function completeActivation(input: Parameters<typeof authApi.completeActivation>[0]) {
+    const result = await authApi.completeActivation(input);
+    setSession(result);
+    return result;
+  }
+
   return {
     user,
     accessToken,
@@ -119,5 +129,7 @@ export const useAuthStore = defineStore('auth', () => {
     verifyOtp,
     login,
     logout,
+    requestActivationOtp,
+    completeActivation,
   };
 });

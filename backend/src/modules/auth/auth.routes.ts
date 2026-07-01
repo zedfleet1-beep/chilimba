@@ -15,6 +15,8 @@ import {
   logout,
   forgotPassword,
   resetPassword,
+  requestActivationOtp,
+  completeActivation,
   me,
 } from './auth.service';
 import {
@@ -26,6 +28,8 @@ import {
   logoutSchema,
   forgotSchema,
   resetSchema,
+  activateRequestSchema,
+  activateCompleteSchema,
 } from './auth.validators';
 
 const router = Router();
@@ -84,6 +88,26 @@ router.post(
   ah(async (req, res) => {
     const input = parseBody(logoutSchema, req.body);
     const result = await logout(input.refreshToken);
+    res.json({ success: true, data: result });
+  }),
+);
+
+router.post(
+  '/activate/request',
+  authRateLimit,
+  ah(async (req, res) => {
+    const input = parseBody(activateRequestSchema, req.body);
+    const result = await requestActivationOtp(input.phone);
+    res.json({ success: true, data: result });
+  }),
+);
+
+router.post(
+  '/activate/complete',
+  authRateLimit,
+  ah(async (req, res) => {
+    const input = parseBody(activateCompleteSchema, req.body);
+    const result = await completeActivation(input);
     res.json({ success: true, data: result });
   }),
 );

@@ -25,6 +25,12 @@ const routes: RouteRecordRaw[] = [
     meta: { public: true, guestOnly: true },
   },
   {
+    path: '/activate',
+    name: 'activate',
+    component: () => import('@/pages/ActivateAccount.vue'),
+    meta: { public: true, guestOnly: true },
+  },
+  {
     path: '/dashboard',
     name: 'dashboard',
     component: () => import('@/pages/Dashboard.vue'),
