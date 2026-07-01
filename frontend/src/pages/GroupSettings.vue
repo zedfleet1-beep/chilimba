@@ -61,6 +61,7 @@ onMounted(async () => {
     payoutRecipients.value = s.payoutRecipientsCount;
     payoutMethod.value = s.payoutMethod;
     allowLoans.value = s.allowLoans;
+    loanInterestPercent.value = Number((s.loanInterestRate * 100).toFixed(2));
     reminderDaysBefore.value = s.reminderDaysBefore;
     whatsappReminders.value = s.whatsappReminders;
     autoOpenNextCycle.value = s.autoOpenNextCycle ?? false;
@@ -81,6 +82,7 @@ const latePenaltyKwacha = ref('0');
 const payoutRecipients = ref(1);
 const payoutMethod = ref<'queue' | 'random' | 'manual' | 'voting'>('queue');
 const allowLoans = ref(false);
+const loanInterestPercent = ref(20);
 const reminderDaysBefore = ref(1);
 const whatsappReminders = ref(true);
 const autoOpenNextCycle = ref(false);
@@ -100,6 +102,10 @@ async function onSave() {
       saveError.value = 'Enter a valid contribution amount';
       return;
     }
+    if (loanInterestPercent.value < 0 || loanInterestPercent.value > 100) {
+      saveError.value = 'Interest rate must be between 0% and 100%';
+      return;
+    }
     await store.updateSettings(id.value, {
       name: name.value,
       description: description.value || null,
@@ -111,6 +117,7 @@ async function onSave() {
       payoutRecipientsCount: payoutRecipients.value,
       payoutMethod: payoutMethod.value,
       allowLoans: allowLoans.value,
+      loanInterestRate: loanInterestPercent.value / 100,
       reminderDaysBefore: reminderDaysBefore.value,
       whatsappReminders: whatsappReminders.value,
       autoOpenNextCycle: autoOpenNextCycle.value,
@@ -281,6 +288,21 @@ watch(saved, (v) => {
         <input v-model="allowLoans" type="checkbox" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
         Allow members to take loans
       </label>
+
+      <div class="pl-6 space-y-1">
+        <label class="block text-sm font-medium text-slate-700">Loan interest rate (%)</label>
+        <input
+          v-model.number="loanInterestPercent"
+          type="number"
+          min="0"
+          max="100"
+          step="0.5"
+          class="w-full max-w-[12rem] h-10 px-3 rounded-lg border border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none"
+        />
+        <p class="text-xs text-slate-500">
+          Applied to new loans when lending is enabled — e.g. {{ loanInterestPercent }}% on K1,000 means K{{ (1000 * loanInterestPercent / 100).toFixed(2) }} interest.
+        </p>
+      </div>
 
       <div class="border-t border-warm-50 pt-4 space-y-3">
         <h3 class="font-display text-sm font-semibold text-slate-700">Cycle automation</h3>
