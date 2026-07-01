@@ -116,6 +116,14 @@ export const useAuthStore = defineStore('auth', () => {
     return result;
   }
 
+  async function forgotPassword(phone: string) {
+    return authApi.forgotPassword(phone);
+  }
+
+  async function resetPassword(input: Parameters<typeof authApi.resetPassword>[0]) {
+    return authApi.resetPassword(input);
+  }
+
   return {
     user,
     accessToken,
@@ -131,5 +139,7 @@ export const useAuthStore = defineStore('auth', () => {
     logout,
     requestActivationOtp,
     completeActivation,
+    forgotPassword,
+    resetPassword,
   };
 });

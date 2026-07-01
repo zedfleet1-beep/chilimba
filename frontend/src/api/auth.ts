@@ -85,3 +85,17 @@ export async function completeActivation(input: {
   const { data } = await api.post<{ success: true; data: AuthResponse }>('/auth/activate/complete', input);
   return data.data;
 }
+
+export async function forgotPassword(phone: string): Promise<{ ok: true }> {
+  const { data } = await api.post<{ success: true; data: { ok: true } }>('/auth/forgot', { phone });
+  return data.data;
+}
+
+export async function resetPassword(input: {
+  phone: string;
+  code: string;
+  newPassword: string;
+}): Promise<{ ok: true }> {
+  const { data } = await api.post<{ success: true; data: { ok: true } }>('/auth/reset', input);
+  return data.data;
+}

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { getErrorCode, getErrorMessage } from '@/api/client';
@@ -17,8 +17,19 @@ const password = ref('');
 const submitError = ref('');
 const errorCode = ref('');
 const submitting = ref(false);
+const resetSuccess = ref(false);
 
 const needsVerification = computed(() => errorCode.value === 'OTP_NOT_VERIFIED');
+
+onMounted(() => {
+  if (route.query.reset === '1') {
+    resetSuccess.value = true;
+  }
+  const fromQuery = route.query.phone;
+  if (typeof fromQuery === 'string' && fromQuery.trim()) {
+    phone.value = fromQuery;
+  }
+});
 
 async function onSubmit() {
   submitError.value = '';
@@ -43,38 +54,55 @@ function goToVerify() {
 
 <template>
   <AuthLayout>
-    <h1 class="text-2xl font-semibold text-slate-900 mb-2">Welcome back</h1>
-    <p class="text-sm text-slate-500 mb-6">Sign in to your Chilimba account.</p>
+    <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100 mb-2">Welcome back</h1>
+    <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">Sign in to your Chilimba account.</p>
 
     <form @submit.prevent="onSubmit" class="space-y-4">
       <PhoneInput v-model="phone" label="Phone number" required />
-      <PasswordInput v-model="password" label="Password" required autocomplete="current-password" />
+      <div>
+        <PasswordInput v-model="password" label="Password" required autocomplete="current-password" />
+        <div class="mt-1 text-right">
+          <router-link
+            :to="{ name: 'forgot-password', query: phone ? { phone } : undefined }"
+            class="text-sm text-brand-600 dark:text-emerald-400 hover:underline"
+          >
+            Forgot password?
+          </router-link>
+        </div>
+      </div>
 
-      <p v-if="submitError && !needsVerification" class="text-sm text-red-600">{{ submitError }}</p>
+      <div
+        v-if="resetSuccess"
+        class="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/50 p-3 text-sm text-emerald-800 dark:text-emerald-200"
+      >
+        Password updated. Sign in with your new password.
+      </div>
+
+      <p v-if="submitError && !needsVerification" class="text-sm text-red-600 dark:text-red-400">{{ submitError }}</p>
 
       <div
         v-if="needsVerification"
-        class="rounded-lg border border-amber-200 bg-amber-50 p-4"
+        class="rounded-lg border border-amber-200 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-950/50 p-4"
       >
         <div class="flex items-start gap-3">
-          <ShieldCheck class="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+          <ShieldCheck class="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
           <div class="flex-1">
-            <p class="text-sm font-medium text-amber-900">Phone not verified yet</p>
-            <p class="text-xs text-amber-800 mt-1">
+            <p class="text-sm font-medium text-amber-900 dark:text-amber-100">Phone not verified yet</p>
+            <p class="text-xs text-amber-800 dark:text-amber-200/90 mt-1">
               We sent a 6-digit code to your WhatsApp. Enter it to finish setting up your account.
             </p>
             <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1">
               <button
                 type="button"
                 @click="goToVerify"
-                class="inline-flex items-center gap-1.5 text-sm font-medium text-amber-900 hover:text-amber-700"
+                class="inline-flex items-center gap-1.5 text-sm font-medium text-amber-900 dark:text-amber-100 hover:text-amber-700 dark:hover:text-amber-300"
               >
                 <ShieldCheck class="w-4 h-4" />
                 Verify your phone →
               </button>
               <router-link
                 :to="{ name: 'activate', query: phone ? { phone } : undefined }"
-                class="inline-flex items-center gap-1.5 text-sm font-medium text-amber-900 hover:text-amber-700"
+                class="inline-flex items-center gap-1.5 text-sm font-medium text-amber-900 dark:text-amber-100 hover:text-amber-700 dark:hover:text-amber-300"
               >
                 Added by your admin? Set password →
               </router-link>
@@ -92,24 +120,24 @@ function goToVerify() {
         <ArrowRight v-if="!submitting" class="w-4 h-4" />
       </button>
 
-      <p class="text-center text-sm text-slate-500">
+      <p class="text-center text-sm text-slate-500 dark:text-slate-400">
         Don&apos;t have an account?
-        <router-link to="/signup" class="text-brand-600 hover:underline">Create one</router-link>
+        <router-link to="/signup" class="text-brand-600 dark:text-emerald-400 hover:underline">Create one</router-link>
       </p>
     </form>
 
-    <div class="mt-6 pt-6 border-t border-slate-200">
-      <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+    <div class="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
+      <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 p-4">
         <div class="flex items-start gap-3">
-          <UserPlus class="w-5 h-5 text-brand-600 mt-0.5 flex-shrink-0" />
+          <UserPlus class="w-5 h-5 text-brand-600 dark:text-emerald-400 mt-0.5 flex-shrink-0" />
           <div class="flex-1">
-            <p class="text-sm font-medium text-slate-900">Added to a group by your admin?</p>
-            <p class="text-xs text-slate-600 mt-1">
+            <p class="text-sm font-medium text-slate-900 dark:text-slate-100">Added to a group by your admin?</p>
+            <p class="text-xs text-slate-600 dark:text-slate-400 mt-1">
               Verify your WhatsApp number and set a password to access your group.
             </p>
             <router-link
               :to="{ name: 'activate', query: phone ? { phone } : undefined }"
-              class="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:text-brand-700"
+              class="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 dark:text-emerald-400 hover:text-brand-700 dark:hover:text-emerald-300"
             >
               Verify number &amp; set password →
             </router-link>
