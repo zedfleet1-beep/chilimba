@@ -126,7 +126,7 @@ watch(() => route.params.id, load);
         <p class="text-sm text-slate-500">Request, approve, and track repayments.</p>
       </div>
       <button
-        v-if="eligibility?.allowLoans && !eligibility.hasActiveLoan"
+        v-if="eligibility?.canRequestLoan"
         class="inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700"
         @click="showRequest = true"
       >
@@ -134,6 +134,20 @@ watch(() => route.params.id, load);
         Request loan
       </button>
     </div>
+
+    <p
+      v-if="eligibility?.allowLoans && !eligibility.hasActiveCycle"
+      class="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3"
+    >
+      The current cycle is complete. Open a new cycle before requesting a loan.
+    </p>
+
+    <p
+      v-else-if="eligibility?.allowLoans && eligibility.hasActiveLoan"
+      class="text-sm text-slate-600 bg-warm-50 border border-warm-100 rounded-xl px-4 py-3"
+    >
+      You already have a pending or active loan for this group.
+    </p>
 
     <div v-if="eligibility" class="bg-white rounded-2xl shadow-soft border border-warm-100 p-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
       <div>

@@ -33,6 +33,8 @@ export interface LoanEligibility {
   interestRate: number;
   hasActiveLoan: boolean;
   activeLoanId: string | null;
+  hasActiveCycle: boolean;
+  canRequestLoan: boolean;
 }
 
 export async function listLoans(groupId: string): Promise<Loan[]> {

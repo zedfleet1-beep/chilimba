@@ -2,7 +2,7 @@
  * Loans service — request, approve, reject, record repayments.
  */
 import { Decimal } from '@prisma/client/runtime/library';
-import { GroupMemberRole, LoanStatus, ContributionStatus } from '@prisma/client';
+import { GroupMemberRole, LoanStatus, ContributionStatus, CycleStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import {
   ConflictError,
@@ -15,6 +15,17 @@ function computeTotalDue(amountNgwe: bigint, interestRate: Decimal): bigint {
   const rate = Number(interestRate);
   const interest = BigInt(Math.round(Number(amountNgwe) * rate));
   return amountNgwe + interest;
+}
+
+async function hasActiveCycle(groupId: string): Promise<boolean> {
+  const active = await prisma.cycle.findFirst({
+    where: {
+      groupId,
+      status: { in: [CycleStatus.open, CycleStatus.in_progress] },
+    },
+    select: { id: true },
+  });
+  return !!active;
 }
 
 async function memberSavingsNgwe(groupId: string, memberId: string): Promise<bigint> {
@@ -58,6 +69,12 @@ export async function requestLoan(
   if (!group?.settings) throw new NotFoundError('Group');
   if (!group.settings.allowLoans) {
     throw new ConflictError('LOANS_DISABLED' as never, 'Loans are not enabled for this group');
+  }
+  if (!(await hasActiveCycle(groupId))) {
+    throw new ConflictError(
+      'CYCLE_NOT_ACTIVE' as never,
+      'Loans can only be requested while a cycle is open or in progress',
+    );
   }
   if (input.amountNgwe <= 0n) {
     throw new ValidationError('Loan amount must be greater than zero');
@@ -219,20 +236,27 @@ export async function getMyLoanEligibility(
   const maxLoanNgwe = BigInt(
     Math.floor(Number(savings) * Number(group.settings.maxLoanMultiplier)),
   );
-  const activeLoan = await prisma.loan.findFirst({
-    where: {
-      groupId,
-      memberId: requester.memberId,
-      status: { in: [LoanStatus.pending, LoanStatus.approved, LoanStatus.active] },
-    },
-  });
+  const [activeLoan, cycleActive] = await Promise.all([
+    prisma.loan.findFirst({
+      where: {
+        groupId,
+        memberId: requester.memberId,
+        status: { in: [LoanStatus.pending, LoanStatus.approved, LoanStatus.active] },
+      },
+    }),
+    hasActiveCycle(groupId),
+  ]);
+
+  const allowLoans = group.settings.allowLoans;
 
   return {
-    allowLoans: group.settings.allowLoans,
+    allowLoans,
     savingsNgwe: String(savings),
     maxLoanNgwe: String(maxLoanNgwe),
     interestRate: Number(group.settings.loanInterestRate),
     hasActiveLoan: !!activeLoan,
     activeLoanId: activeLoan?.id ?? null,
+    hasActiveCycle: cycleActive,
+    canRequestLoan: allowLoans && cycleActive && !activeLoan,
   };
 }
